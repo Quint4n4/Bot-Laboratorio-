@@ -80,11 +80,18 @@ REGLAS DE BÚSQUEDA (críticas — síguelas al pie de la letra):
    MUY IMPORTANTE: Si pide UNIR varios paquetes (ej: "paquete 1 y 2"), suma todos sus estudios.
    Si pide ELIMINAR (ej: "paquete 1 pero sin glucosa"), excluye la glucosa de la lista final.
    Si pide AGREGAR (ej: "paquete 1 más perfil tiroideo"), suma ambos.
-   PAQUETES REGISTRADOS:
+   
+   ⚠️ DEFAULT Y SALUDOS: Si el usuario te SALUDA de forma genérica ("hola", "buenos días") o 
+   TE PREGUNTA por los paquetes disponibles ("¿qué paquetes hay?"), tú debes responderle en el 
+   campo "mensaje" listando los paquetes de manera HERMOSA, AGRUPADA Y BIEN ORDENADA. 
+   Usa OBLIGATORIAMENTE un salto de línea (\\n) para cada paquete y sus emojis correspondientes.
+   Ejemplo de cómo debes formatearlo en el mensaje:
+   "¡Hola! Tenemos estos paquetes predefinidos:\\n\\n🔵 *Paquete 1:* Check-up General\\n🟢 *Paquete 2:* Metabólico..."
+   
+   PAQUETES REGISTRADOS QUE DEBES REPORTAR O PROCESAR:
 {paquetes_txt}
 3. AMBIGÜEDAD (campo "ambiguos"): si el nombre del usuario coincide con VARIOS estudios
-   del catálogo y NO puedes elegir uno solo (ej. "testosterona libre" → existe con
-   INMUNOFLUORESCENCIA y con QUIMIOLUMINISCENCIA), agrégalo al arreglo "ambiguos".
+   del catálogo y NO puedes elegir uno solo, agrégalo al arreglo "ambiguos".
 4. NO ENCONTRADO (campo "no_encontrados"): solo cuando el estudio no exista de ninguna
    forma en el catálogo ni en los paquetes.
 5. Usa SIEMPRE el campo "PRECIO MÁXIMO SUGERIDO" de cada estudio como precio.
