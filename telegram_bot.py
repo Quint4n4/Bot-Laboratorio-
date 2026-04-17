@@ -156,28 +156,7 @@ async def _evaluar_resultado(update: Update, context: ContextTypes.DEFAULT_TYPE,
 # Handler: Texto
 # ─────────────────────────────────────────────────────────────
 async def handle_studies_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    texto = update.message.text.strip()
-    # Verificar si el usuario eligió un número de paquete
-    if texto in PAQUETES:
-        return await handle_paquete(update, context, texto)
-    return await _procesar_texto(update, context, texto)
-
-async def handle_paquete(update: Update, context: ContextTypes.DEFAULT_TYPE, numero: str) -> int:
-    """El usuario eligió un paquete por número. Procesa sus estudios directamente."""
-    paquete = get_paquete(numero)
-    if not paquete:
-        await update.message.reply_text("Número de paquete no válido. Elige del 1 al 5 o escribe los estudios.")
-        return ESPERANDO_ESTUDIOS
-
-    nombres = paquete["estudios"]
-    consulta = "Quiero cotizar los siguientes estudios: " + ", ".join(nombres)
-
-    await update.message.reply_text(
-        f"{paquete['emoji']} Procesando *{paquete['nombre']}*...\n"
-        + "\n".join(f"• {e.title()}" for e in nombres),
-        parse_mode="Markdown"
-    )
-    return await _procesar_texto(update, context, consulta)
+    return await _procesar_texto(update, context, update.message.text.strip())
 
 # ─────────────────────────────────────────────────────────────
 # Handler: Voz

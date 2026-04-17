@@ -47,6 +47,8 @@ def transcribe_audio(audio_path: str) -> str:
         )
     return response.text.strip()
 
+from paquetes import PAQUETES
+
 # ─────────────────────────────────────────────────────────────
 # Motor principal de cotización (catálogo completo en prompt)
 # ─────────────────────────────────────────────────────────────
@@ -56,6 +58,12 @@ def generate_rag_response(query: str) -> dict:
     fuzzy/inteligente sin depender de búsqueda vectorial.
     GPT infiere el estudio correcto aunque el usuario no escriba el nombre exacto.
     """
+    
+    # Preparamos la descripción literal de los paquetes para que la IA sepa restarlos o sumarlos
+    paquetes_txt = "\n".join(
+        f"  - Paquete {num}: {p['nombre']} -> contiene: {', '.join(p['estudios'])}"
+        for num, p in PAQUETES.items()
+    )
 
     sys_prompt = f"""Eres el mejor asistente virtual de recepción del laboratorio OPLAB.
 Tu misión: identificar qué estudios clínicos pide el usuario, encontrarlos en el catálogo
@@ -67,15 +75,21 @@ REGLAS DE BÚSQUEDA (críticas — síguelas al pie de la letra):
 1. INFIERE inteligentemente: "AFP"→"ALFAFETOPROTEINA (AFP)", "estradiol"→"ESTRADIOL SERICO",
    "CA 15-3"→"CA-15-3", "LH"→"HORMONA LUTEINIZANTE", "FSH"→"HORMONA FOLICULO ESTIMULANTE".
    Si puedes deducirlo con certeza, ponlo directamente en "cotizacion".
-2. AMBIGÜEDAD (campo "ambiguos"): si el nombre del usuario coincide con VARIOS estudios
+2. PAQUETES DE ESTUDIOS: El usuario puede solicitar paquetes enteros por número (ej: "1", "paquete 1").
+   Si pide un paquete, despliega e inserta TODOS los estudios correspondientes en "cotizacion".
+   MUY IMPORTANTE: Si pide UNIR varios paquetes (ej: "paquete 1 y 2"), suma todos sus estudios.
+   Si pide ELIMINAR (ej: "paquete 1 pero sin glucosa"), excluye la glucosa de la lista final.
+   Si pide AGREGAR (ej: "paquete 1 más perfil tiroideo"), suma ambos.
+   PAQUETES REGISTRADOS:
+{paquetes_txt}
+3. AMBIGÜEDAD (campo "ambiguos"): si el nombre del usuario coincide con VARIOS estudios
    del catálogo y NO puedes elegir uno solo (ej. "testosterona libre" → existe con
-   INMUNOFLUORESCENCIA y con QUIMIOLUMINISCENCIA), agrégalo al arreglo "ambiguos" con
-   sus opciones. NO lo pongas en "no_encontrados".
-3. NO ENCONTRADO (campo "no_encontrados"): solo cuando el estudio no exista de ninguna
-   forma en el catálogo.
-4. Usa SIEMPRE el campo "PRECIO MÁXIMO SUGERIDO" de cada estudio como precio.
-5. "genera_pdf": true solo cuando TODO en "cotizacion" está resuelto Y "ambiguos" está vacío.
-6. Devuelve ÚNICAMENTE un JSON válido, sin texto adicional.
+   INMUNOFLUORESCENCIA y con QUIMIOLUMINISCENCIA), agrégalo al arreglo "ambiguos".
+4. NO ENCONTRADO (campo "no_encontrados"): solo cuando el estudio no exista de ninguna
+   forma en el catálogo ni en los paquetes.
+5. Usa SIEMPRE el campo "PRECIO MÁXIMO SUGERIDO" de cada estudio como precio.
+6. "genera_pdf": true solo cuando TODO en "cotizacion" está resuelto Y "ambiguos" está vacío.
+7. Devuelve ÚNICAMENTE un JSON válido, sin texto adicional.
 
 ═══════════════════════════════════════════════
 ESTRUCTURA JSON A DEVOLVER:
