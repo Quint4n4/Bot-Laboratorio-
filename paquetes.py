@@ -1,70 +1,63 @@
 """
 paquetes.py
 -----------
-Define los paquetes de estudios predefinidos del laboratorio OPLAB.
-
-Para AGREGAR o MODIFICAR un paquete, edita este archivo directamente.
-Los nombres de los estudios deben coincidir con los del catálogo (conocimiento.md).
+Paquetes de estudios predefinidos de OPLAB.
+Para modificar un paquete edita este archivo y haz git push.
+LOS NOMBRES DE ESTUDIOS DEBEN COINCIDIR EXACTAMENTE CON EL CATÁLOGO.
 """
 
 PAQUETES = {
     "1": {
-        "nombre": "Biometr",
+        "nombre": "Check-up General",
         "emoji": "🔵",
-        "descripcion": "Revisión general de rutina",
+        "descripcion": "Revisión completa de salud",
         "estudios": [
             "BIOMETRÍA HEMÁTICA",
-            "GLUCOSA",
-            "UREA SERICA",
-            "CREATININA",
+            "QUÍMICA SANGUÍNEA 12 ELEMENTOS (QS6 Y LÍPIDOS)",  # QS6 + Lípidos
+            "PROTEINA C REACTIVA ULTRASENSIBLE (hsCRP)",  # PCR ultrasensible
             "EXAMEN GENERAL DE ORINA",
+            "HEMOGLOBINA GLICADA",  # Hemoglobina glicosilada
+            "PERFIL HEPÁTICO BÁSICO",
+            "PERFIL REUMÁTICO",  # Perfil Reumatoide
+            "PERFIL TIROIDEO (8 ELEMENTOS)",
         ],
     },
     "2": {
-        "nombre": "Paquete Control Metabólico",
-        "emoji": "🟢",
-        "descripcion": "Control de diabetes y lípidos",
+        "nombre": "Estudios de Gabinete y Especiales",
+        "emoji": "🟡",
+        "descripcion": "Electrocardiograma, ultrasonidos y densitometría",
+        # ⚠️ Estos estudios SON DE GABINETE. No los tienes en el catálogo de laboratorio actual.
+        # Serán marcados como "no encontrados" por el bot hasta que los agregues a conocimiento.md
         "estudios": [
-            "BIOMETRÍA HEMÁTICA",
-            "GLUCOSA",
-            "HEMOGLOBINA GLUCOSILADA (HBA1C)",
-            "COLESTEROL",
-            "TRIGLICÉRIDOS",
-            "HDL COLESTEROL",
-            "LDL COLESTEROL",
+            "ELECTROCARDIOGRAMA",
+            "ULTRASONIDO HEPÁTICO",
+            "ULTRASONIDO RENAL",
+            "DENSITOMETRÍA ÓSEA",
         ],
     },
     "3": {
-        "nombre": "Paquete Perfil Hepático",
-        "emoji": "🟡",
-        "descripcion": "Evaluación de función del hígado",
+        "nombre": "Perfil TORCH IgG / IgM",
+        "emoji": "🟠",
+        "descripcion": "Citomegalovirus y Virus Epstein-Barr",
         "estudios": [
-            "PERFIL HEPÁTICO BÁSICO",
-            "BILIRRUBINA DIRECTA",
-            "ALBUMINA",
-            "TIEMPO DE PROTROMBINA (TP)",
+            "PERFIL DE TORCH CUALITATIVO (IgG/IgM)",  # Incluye Citomegalovirus y Epstein-Barr
         ],
     },
     "4": {
-        "nombre": "Paquete Hormonal Femenino",
+        "nombre": "Perfil Hormonal Femenino",
         "emoji": "🟣",
-        "descripcion": "Panel hormonal reproductivo",
+        "descripcion": "Panel hormonal reproductivo completo",
         "estudios": [
-            "HORMONA FOLICULO ESTIMULANTE",
             "HORMONA LUTEINIZANTE",
+            "HORMONA FOLICULO ESTIMULANTE",
+            "HORMONA ESTIMULANTE DE TIROIDES",
             "ESTRADIOL SERICO",
             "PROGESTERONA",
             "PROLACTINA",
-        ],
-    },
-    "5": {
-        "nombre": "Paquete Tiroides",
-        "emoji": "🟠",
-        "descripcion": "Evaluación de función tiroidea",
-        "estudios": [
-            "TSH",
-            "T3 LIBRE",
-            "T4 LIBRE",
+            "TESTOSTERONA TOTAL",
+            "TESTOSTERONA LIBRE (QUIMIOLUMINISCENCIA)",
+            # "SULFATO DE DHEA" <- No existe en tu documento conocimiento.md. 
+            # Agrégalo en tu PDF/conocimiento.md si deseas que el bot lo cotice.
         ],
     },
 }
@@ -80,7 +73,9 @@ def get_menu_text() -> str:
             f"   _{p['descripcion']}_\n"
             f"{estudios_txt}\n"
         )
-    lineas.append("Responde con el *número* del paquete que deseas, o escribe / dicta los estudios específicos que necesitas.")
+    lineas.append(
+        "Responde con el *número* del paquete, o ✍️ escribe / 🎤 dicta los estudios que necesitas."
+    )
     return "\n".join(lineas)
 
 
