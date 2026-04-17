@@ -7,6 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from config import settings
 from rag import generate_rag_response, transcribe_audio
 from pdf_service import create_quote_pdf
+from paquetes import get_menu_text, get_paquete, PAQUETES
 
 # ─────────────────────────────────────────────────────────────
 # Estados
@@ -20,10 +21,12 @@ PALABRAS_SI = {"si", "sí", "yes", "descartar", "descarta", "omitir", "eliminar"
 # /start
 # ─────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data.clear()
+    menu = get_menu_text()
     await update.message.reply_text(
-        "👋 ¡Hola! Soy tu asistente de OPLAB.\n\n"
-        "Puedes ✍️ *escribir* los estudios que necesitas cotizar\n"
-        "o enviar un 🎤 *mensaje de voz* con los nombres.",
+        "👋 ¡Hola! Soy tu asistente de cotizaciones de *OPLAB*.\n\n"
+        "Puedes elegir un paquete predefinido o pedir estudios específicos:\n\n"
+        f"{menu}",
         parse_mode="Markdown"
     )
     return ESPERANDO_ESTUDIOS
@@ -153,7 +156,28 @@ async def _evaluar_resultado(update: Update, context: ContextTypes.DEFAULT_TYPE,
 # Handler: Texto
 # ─────────────────────────────────────────────────────────────
 async def handle_studies_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    return await _procesar_texto(update, context, update.message.text)
+    texto = update.message.text.strip()
+    # Verificar si el usuario eligió un número de paquete
+    if texto in PAQUETES:
+        return await handle_paquete(update, context, texto)
+    return await _procesar_texto(update, context, texto)
+
+async def handle_paquete(update: Update, context: ContextTypes.DEFAULT_TYPE, numero: str) -> int:
+    """El usuario eligió un paquete por número. Procesa sus estudios directamente."""
+    paquete = get_paquete(numero)
+    if not paquete:
+        await update.message.reply_text("Número de paquete no válido. Elige del 1 al 5 o escribe los estudios.")
+        return ESPERANDO_ESTUDIOS
+
+    nombres = paquete["estudios"]
+    consulta = "Quiero cotizar los siguientes estudios: " + ", ".join(nombres)
+
+    await update.message.reply_text(
+        f"{paquete['emoji']} Procesando *{paquete['nombre']}*...\n"
+        + "\n".join(f"• {e.title()}" for e in nombres),
+        parse_mode="Markdown"
+    )
+    return await _procesar_texto(update, context, consulta)
 
 # ─────────────────────────────────────────────────────────────
 # Handler: Voz
