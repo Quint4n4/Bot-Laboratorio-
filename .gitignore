@@ -1,0 +1,40 @@
+# ───── Python ─────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# ───── Entorno virtual ────────────────────────
+.env
+venv/
+env/
+.venv/
+
+# ───── PDFs y archivos temporales ────────────
+*.pdf
+*.docx
+cotizacion_oplab.pdf
+prueba_*.pdf
+
+# ───── Playwright ─────────────────────────────
+.playwright/
+
+# ───── Archivos locales que no van al servidor
+debug_prices.py
+test_pdf.py
+fetch_qr.py
+setup_instance.py
+LISTA DE PRECIOS MAQUILA OPLAB 2026.pdf
+fondo_blanco.png
+docker-compose.yml
+~$*.docx
+
+# ───── IDE ────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pdf
+.playwright/
+venv/
+.venv/
+*.docx
+fondo_blanco.png
+LISTA DE PRECIOS MAQUILA OPLAB 2026.pdf
+debug_prices.py
+test_pdf.py
