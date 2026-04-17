@@ -49,6 +49,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Instalar dependencias del sistema requeridas por Playwright/Chromium
+# (incluyendo libxkbcommon y otras libs necesarias en Linux)
+RUN playwright install-deps chromium
+
 # Instalar Chromium de Playwright
 RUN playwright install chromium
 
