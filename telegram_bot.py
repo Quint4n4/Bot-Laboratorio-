@@ -37,6 +37,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 def _calcular_total(cotizacion: list) -> float:
     return sum(float(c.get("precio", 0)) for c in cotizacion)
 
+def _calcular_total_min(cotizacion: list) -> float:
+    return sum(float(c.get("precio_min", c.get("precio", 0))) for c in cotizacion)
+
 async def _pedir_nombre(update: Update, cotizacion: list) -> int:
     """Guarda ia_json final y pide el nombre del paciente."""
     return ESPERANDO_NOMBRE
@@ -110,7 +113,8 @@ async def _evaluar_resultado(update: Update, context: ContextTypes.DEFAULT_TYPE,
     # ── CASO 1: Todo perfecto ────────────────────────────────
     if genera_pdf and cotizacion and not ambiguos and not no_encontrados:
         total = _calcular_total(cotizacion)
-        context.user_data["ia_json"] = {"cotizacion": cotizacion, "total": total, "genera_pdf": True}
+        total_min = _calcular_total_min(cotizacion)
+        context.user_data["ia_json"] = {"cotizacion": cotizacion, "total": total, "total_min": total_min, "genera_pdf": True}
         await update.message.reply_text(
             f"{ia.get('mensaje', '¡Listo!')}\n\n"
             "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
@@ -131,9 +135,11 @@ async def _evaluar_resultado(update: Update, context: ContextTypes.DEFAULT_TYPE,
         context.user_data["cotizacion_valida"]  = cotizacion
         context.user_data["no_encontrados"]     = no_encontrados
         context.user_data["total_valido"]       = _calcular_total(cotizacion)
+        context.user_data["total_min_valido"]   = _calcular_total_min(cotizacion)
         context.user_data["ia_json_parcial"]    = {
             "cotizacion": cotizacion,
             "total": context.user_data["total_valido"],
+            "total_min": context.user_data["total_min_valido"],
             "genera_pdf": True
         }
         return await _enviar_descarte(update, cotizacion, no_encontrados)
@@ -243,9 +249,11 @@ async def handle_aclaracion(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         # Todo resuelto → pedir nombre
         total = _calcular_total(cotizacion_confirmada)
+        total_min = _calcular_total_min(cotizacion_confirmada)
         context.user_data["ia_json"] = {
             "cotizacion": cotizacion_confirmada,
             "total": total,
+            "total_min": total_min,
             "genera_pdf": True
         }
         nombres = ", ".join(c.get("estudio", "") for c in cotizacion_confirmada)
@@ -276,9 +284,11 @@ async def handle_descarte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return ESPERANDO_ESTUDIOS
 
         total = _calcular_total(cotizacion_valida)
+        total_min = _calcular_total_min(cotizacion_valida)
         context.user_data["ia_json"] = {
             "cotizacion": cotizacion_valida,
             "total": total,
+            "total_min": total_min,
             "genera_pdf": True
         }
         nombres = ", ".join(c.get("estudio", "") for c in cotizacion_valida)
@@ -308,9 +318,11 @@ async def handle_descarte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Combinar con los ya confirmados y seguir
             cotizacion_total = cotizacion_valida + nuevo_encontrado
             total = _calcular_total(cotizacion_total)
+            total_min = _calcular_total_min(cotizacion_total)
             context.user_data["ia_json"] = {
                 "cotizacion": cotizacion_total,
                 "total": total,
+                "total_min": total_min,
                 "genera_pdf": True
             }
             nombres = ", ".join(c.get("estudio", "") for c in cotizacion_total)
@@ -359,14 +371,21 @@ async def handle_patient_name(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     try:
         pdf_path = await create_quote_pdf(ia_json, patient_name, "cotizacion_oplab.pdf")
+        internal_pdf_path = await create_quote_pdf(ia_json, patient_name, "cotizacion_interna_oplab.pdf", is_internal=True)
         await context.bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
 
-        with open(pdf_path, "rb") as f:
+        with open(pdf_path, "rb") as f_ext, open(internal_pdf_path, "rb") as f_int:
             await context.bot.send_document(
                 chat_id=chat_id,
-                document=f,
+                document=f_ext,
                 filename=f"Cotizacion_{patient_name.replace(' ', '_')}.pdf",
-                caption="✅ Adjunto la cotización oficial en PDF.\n\nEscríbeme o manda un audio con nuevos estudios."
+                caption="✅ Adjunto la cotización oficial en PDF para el paciente."
+            )
+            await context.bot.send_document(
+                chat_id=chat_id,
+                document=f_int,
+                filename=f"INTERNO_Laboratorio_{patient_name.replace(' ', '_')}.pdf",
+                caption="🔒 Adjunto el reporte contable interno (Costo Maquila Desglosado)."
             )
         context.user_data.clear()
 

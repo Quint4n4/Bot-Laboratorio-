@@ -166,7 +166,7 @@ def _get_preparacion(nombre_estudio: str) -> list[str]:
         "Llegar descansado y bien hidratado (agua pura está permitida).",
     ]
 
-async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: str = "cotizacion.pdf") -> str:
+async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: str = "cotizacion.pdf", is_internal: bool = False) -> str:
     """
     Toma los datos extraídos de la IA y del Paciente y genera un PDF usando Chromium Headless.
     Página 1: Tabla de cotización con logo, fecha e info institucional.
@@ -185,27 +185,54 @@ async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: st
     # 3. Configurar Jinja2
     template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
     env = Environment(loader=FileSystemLoader(template_dir))
-    template = env.get_template("cotizacion.html")
+    
+    template_name = "cotizacion_interna.html" if is_internal else "cotizacion.html"
+    template = env.get_template(template_name)
     
     # 4. Preparar items + recomendaciones de preparación
     lista_cotizacion = ia_json.get("cotizacion", [])
-    total = ia_json.get("total", 0)
     
+    # Si es interno, calculamos basado en total_min (costo maquila)
+    if is_internal:
+        total_monto = ia_json.get("total_min", ia_json.get("total", 0))
+    else:
+        total_monto = ia_json.get("total", 0)
+        
     items = []
+    subtotal = 0.0
     for c in lista_cotizacion:
         nombre = c.get("estudio", c.get("nombre", "Estudio Desconocido"))
-        precio = c.get("precio", 0)
+        
+        if is_internal:
+            # En cotización interna cobramos precio maquila
+            precio = float(c.get("precio_min", c.get("precio", 0)))
+        else:
+            # En cotización normal cobramos precio máximo
+            precio = float(c.get("precio", 0))
+            
         recomendacion = c.get("recomendacion", "")
         tiempo = c.get("tiempo", "")
         preparacion = _get_preparacion(nombre)
         
         items.append({
             "nombre": nombre,
-            "precio": f"{float(precio):.2f}",
+            "precio": f"{precio:.2f}",
             "recomendacion": recomendacion,
             "tiempo": tiempo,
             "preparacion": preparacion
         })
+        subtotal += precio
+
+    # Matemáticas internas
+    if is_internal:
+        subtotal_sin_iva = subtotal / 1.16
+        iva_calculado = subtotal - subtotal_sin_iva
+        total_final = subtotal
+    else:
+        # Externo no lleva desglose en este caso, o es igual
+        subtotal_sin_iva = 0
+        iva_calculado = 0
+        total_final = subtotal
     
     # 5. Renderizar HTML
     rendered_html = template.render(
@@ -213,7 +240,9 @@ async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: st
         fecha=fecha_formateada,
         paciente_nombre=patient_name,
         items=items,
-        total=f"{float(total):.2f}"
+        total=f"{total_final:.2f}",
+        subtotal=f"{subtotal_sin_iva:.2f}",
+        iva=f"{iva_calculado:.2f}"
     )
     
     # 6. Generar PDF con Playwright
