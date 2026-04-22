@@ -130,15 +130,20 @@ async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
         return tmp.name
 
     try:
+        # ElevenLabs v2 tiene un bug donde frases menores a 15 caracteres las dice en inglés.
+        # Fallback a OpenAI (más rápido y estable) para mensajes super cortos.
+        if len(cleaned) < 25:
+            raise Exception("Mensaje demasiado corto para detectar español nativo, delegando a fallback")
+
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _call_elevenlabs)
     except Exception as e:
-        print(f"[TTS] ElevenLabs falló ({e}), usando OpenAI TTS como fallback...")
+        print(f"[TTS] Usando OpenAI TTS. Motivo: {e}")
         # Fallback a OpenAI TTS
         response = _openai_client.audio.speech.create(
             model="tts-1-hd",
-            voice="nova",
+            voice="nova" if voice_id in ["9BWtsMINqrJLrRacOk9x", "FGY2WhTYpPnrIDTdsKH5", "EXAVITQu4vr4xnSDxMaL"] else "alloy",
             input=cleaned,
             speed=0.95,
         )
