@@ -285,6 +285,7 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 - Muestra requerida: Heces Frasco esteril
 
 
+
 ## CORTISOL
 - PRECIO MÁXIMO SUGERIDO: $500
 - PRECIO MÍNIMO SUGERIDO: $300
