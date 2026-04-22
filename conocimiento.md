@@ -284,6 +284,12 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 - PRECIO MÍNIMO SUGERIDO: $130
 - Muestra requerida: Heces Frasco esteril
 
+
+## CORTISOL
+- PRECIO MÁXIMO SUGERIDO: $500
+- PRECIO MÍNIMO SUGERIDO: $300
+- Muestra requerida: Suero Tubo rojo o amarillo
+
 ## CREATININA SERICA
 - PRECIO MÁXIMO SUGERIDO: $102
 - PRECIO MÍNIMO SUGERIDO: $45
@@ -1083,8 +1089,3 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 5. EXUDADOS (Faríngeo, Vaginal, Uretral, etc.):
 - No antibióticos (3 días mínimo). Faríngeo: ayuno sin lavado de dientes.
 - Vaginal: sin relaciones 48h, sin lavados ni óvulos, fuera de periodo menstrual.
-
-## CORTISOL
-- PRECIO MÁXIMO SUGERIDO: $500
-- PRECIO MÍNIMO SUGERIDO: $300
-- Muestra requerida: Suero Tubo rojo o amarillo
