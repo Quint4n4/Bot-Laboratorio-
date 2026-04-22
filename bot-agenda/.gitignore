@@ -1,0 +1,15 @@
+# Dependencias y entornos
+venv/
+__pycache__/
+*.pyc
+
+# Variables de entorno
+.env
+
+# Base de datos
+agenda.db
+
+# Audio / PDF generados localmente
+*.mp3
+*.ogg
+*.pdf

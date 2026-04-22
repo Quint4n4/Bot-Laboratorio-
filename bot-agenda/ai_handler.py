@@ -1,0 +1,483 @@
+"""
+ai_handler.py - Cerebro del bot: LLM, Function Calling y Tool Calling
+Agenda Bot - Asistente Personal
+"""
+import json
+import os
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
+
+from openai import OpenAI
+from sqlalchemy.orm import Session
+from database import Event, User, EventType, EventStatus
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+# ---------------------------------------------------------------------------
+# HELPER: Convertir hora local del usuario a UTC para guardar en BD
+# ---------------------------------------------------------------------------
+def _local_to_utc(iso_str: str, tz: ZoneInfo) -> datetime:
+    """
+    Convierte un string ISO 8601 sin timezone (generado por el LLM en hora local)
+    a datetime UTC para almacenar en la base de datos.
+    """
+    naive = datetime.fromisoformat(iso_str)
+    # Interpretar como hora local del usuario
+    local_dt = naive.replace(tzinfo=tz)
+    # Convertir a UTC
+    return local_dt.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
+# ---------------------------------------------------------------------------
+# HERRAMIENTAS (Tools) que el LLM puede ejecutar
+# ---------------------------------------------------------------------------
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_event",
+            "description": (
+                "Crea un recordatorio, tarea o cita en la agenda del usuario. "
+                "SIEMPRE verifica conflictos de horario antes de crear el evento. "
+                "Si hay un evento en el mismo horario, informa al usuario y pregunta si desea continuar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title":          {"type": "string",  "description": "Título corto del evento en español"},
+                    "event_type":     {"type": "string",  "enum": ["reminder", "meeting", "task"]},
+                    "start_datetime": {"type": "string",  "description": "Hora local del usuario en ISO 8601 (sin timezone). Ejemplo: 2026-04-22T16:00:00"},
+                    "end_datetime":   {"type": "string",  "description": "Hora local fin, ISO 8601. Solo para meetings."},
+                    "all_day":        {"type": "boolean", "description": "True si el evento es de todo el día"},
+                    "description":    {"type": "string",  "description": "Detalle opcional"},
+                    "force":          {"type": "boolean", "description": "Si es True, crea el evento aunque haya conflicto"},
+                },
+                "required": ["title", "event_type", "start_datetime"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_event",
+            "description": "Reagenda o modifica un evento existente.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id":        {"type": "integer", "description": "ID del evento a modificar"},
+                    "new_start":       {"type": "string",  "description": "Nueva fecha/hora inicio ISO 8601 en hora local"},
+                    "new_end":         {"type": "string",  "description": "Nueva fecha/hora fin ISO 8601 en hora local"},
+                    "new_title":       {"type": "string",  "description": "Nuevo título"},
+                    "new_description": {"type": "string",  "description": "Nuevo detalle"},
+                },
+                "required": ["event_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_event",
+            "description": "Cancela o elimina un evento de la agenda.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "integer", "description": "ID del evento a cancelar"},
+                },
+                "required": ["event_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_event",
+            "description": "Marca un evento o tarea como completado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "integer"},
+                },
+                "required": ["event_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "snooze_event",
+            "description": "Pospone un recordatorio X minutos.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "integer"},
+                    "minutes":  {"type": "integer", "description": "Minutos a posponer"},
+                },
+                "required": ["event_id", "minutes"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_agenda",
+            "description": "Consulta los eventos pendientes del usuario en un rango de fechas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from_date": {"type": "string", "description": "Fecha inicio en hora local ISO 8601"},
+                    "to_date":   {"type": "string", "description": "Fecha fin en hora local ISO 8601"},
+                },
+                "required": ["from_date", "to_date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_report",
+            "description": "Genera datos para un reporte de productividad (daily, weekly, monthly).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
+                },
+                "required": ["period"],
+            },
+        },
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# HELPERS INTERNOS
+# ---------------------------------------------------------------------------
+
+def _check_conflicts(start_utc: datetime, end_utc: datetime, user_id: str, db: Session, exclude_id: int = None):
+    """
+    Verifica si hay eventos activos en el rango dado.
+    Retorna lista de eventos en conflicto.
+    """
+    q = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.status == EventStatus.pending,
+        Event.start_datetime < end_utc,
+        (Event.end_datetime == None) | (Event.end_datetime > start_utc),
+    )
+    if exclude_id:
+        q = q.filter(Event.id != exclude_id)
+    # Para recordatorios sin end, comparar inicio exacto con margen de 15 min
+    conflicts = []
+    for ev in q.all():
+        ev_end = ev.end_datetime or (ev.start_datetime + timedelta(minutes=15))
+        if ev.start_datetime < end_utc and ev_end > start_utc:
+            conflicts.append(ev)
+    return conflicts
+
+
+def _fmt_local(utc_dt: datetime, tz: ZoneInfo) -> str:
+    """Formatea un datetime UTC a hora local 12h."""
+    local = utc_dt.replace(tzinfo=dt_timezone.utc).astimezone(tz)
+    return local.strftime("%I:%M %p").lstrip("0")
+
+
+# ---------------------------------------------------------------------------
+# EJECUTORES DE TOOLS
+# ---------------------------------------------------------------------------
+
+def _exec_create_event(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> dict:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"CREATE_EVENT args: {args}")
+    try:
+        start_utc = _local_to_utc(args["start_datetime"], tz)
+        end_utc   = _local_to_utc(args["end_datetime"], tz) if args.get("end_datetime") else start_utc + timedelta(minutes=30)
+        force     = args.get("force", False)
+        logger.info(f"CREATE_EVENT start_utc={start_utc} end_utc={end_utc}")
+
+        # Detección de conflictos (a menos que force=True)
+        if not force:
+            try:
+                conflicts = _check_conflicts(start_utc, end_utc, user_id, db)
+            except Exception as ce:
+                logger.error(f"Error en _check_conflicts: {ce}", exc_info=True)
+                conflicts = []  # Si falla la verificación, continuar sin conflictos
+
+            if conflicts:
+                conflict_info = [
+                    {"id": c.id, "title": c.title, "start": _fmt_local(c.start_datetime, tz)}
+                    for c in conflicts
+                ]
+                return {
+                    "ok": False,
+                    "conflict": True,
+                    "message": "Hay uno o más eventos en ese horario.",
+                    "conflicting_events": conflict_info,
+                }
+
+        event = Event(
+            user_telegram_id=user_id,
+            title=args["title"],
+            event_type=args.get("event_type", "reminder"),
+            description=args.get("description"),
+            start_datetime=start_utc,
+            end_datetime=_local_to_utc(args["end_datetime"], tz) if args.get("end_datetime") else None,
+            all_day=args.get("all_day", False),
+        )
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        logger.info(f"CREATE_EVENT OK id={event.id} titulo='{event.title}' utc={event.start_datetime}")
+        return {
+            "ok": True,
+            "event_id": event.id,
+            "title": event.title,
+            "start_utc": str(event.start_datetime),
+            "start_local": _fmt_local(event.start_datetime, tz),
+        }
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).error(f"ERROR en _exec_create_event: {e}", exc_info=True)
+        return {"ok": False, "error": str(e)}
+
+
+def _exec_update_event(args: dict, db: Session, tz: ZoneInfo) -> dict:
+    event = db.query(Event).filter(Event.id == args["event_id"]).first()
+    if not event:
+        return {"ok": False, "error": "Evento no encontrado"}
+    
+    new_start_utc = _local_to_utc(args["new_start"], tz) if args.get("new_start") else event.start_datetime
+    new_end_utc   = _local_to_utc(args["new_end"], tz) if args.get("new_end") else (event.end_datetime if event.end_datetime else new_start_utc + timedelta(minutes=30))
+    force         = args.get("force", False)
+
+    # Solo checar conflictos si realmente esta cambiando el horario
+    if args.get("new_start") or args.get("new_end"):
+        if not force:
+            try:
+                conflicts = _check_conflicts(new_start_utc, new_end_utc, event.user_telegram_id, db)
+                # Ignorar el mismo evento siendo actualizado
+                conflicts = [c for c in conflicts if c.id != event.id]
+            except Exception:
+                conflicts = []
+
+            if conflicts:
+                conflict_info = [{"id": c.id, "title": c.title, "start": _fmt_local(c.start_datetime, tz)} for c in conflicts]
+                return {
+                    "ok": False,
+                    "conflict": True,
+                    "message": "Hay eventos que se empalman con este nuevo horario.",
+                    "conflicting_events": conflict_info,
+                }
+
+    if args.get("new_start"):
+        event.start_datetime = new_start_utc
+    if args.get("new_end"):
+        event.end_datetime = new_end_utc
+    if args.get("new_title"):
+        event.title = args["new_title"]
+    if args.get("new_description"):
+        event.description = args["new_description"]
+    db.commit()
+    return {"ok": True, "event_id": event.id}
+
+
+def _exec_cancel_event(args: dict, db: Session) -> dict:
+    event = db.query(Event).filter(Event.id == args["event_id"]).first()
+    if not event:
+        return {"ok": False, "error": "Evento no encontrado"}
+    event.status = EventStatus.cancelled
+    db.commit()
+    return {"ok": True}
+
+
+def _exec_complete_event(args: dict, db: Session) -> dict:
+    event = db.query(Event).filter(Event.id == args["event_id"]).first()
+    if not event:
+        return {"ok": False, "error": "Evento no encontrado"}
+    event.status = EventStatus.completed
+    db.commit()
+    return {"ok": True}
+
+
+def _exec_snooze_event(args: dict, db: Session) -> dict:
+    event = db.query(Event).filter(Event.id == args["event_id"]).first()
+    if not event:
+        return {"ok": False, "error": "Evento no encontrado"}
+    event.start_datetime = event.start_datetime + timedelta(minutes=args["minutes"])
+    event.status         = EventStatus.pending
+    event.reminder_sent  = False
+    event.followup_count = 0
+    event.last_reminded_at = None
+    db.commit()
+    return {"ok": True, "new_time_utc": str(event.start_datetime)}
+
+
+def _exec_query_agenda(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> dict:
+    start_utc = _local_to_utc(args["from_date"], tz)
+    end_utc   = _local_to_utc(args["to_date"], tz)
+    events = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.start_datetime >= start_utc,
+        Event.start_datetime <= end_utc,
+        Event.status != EventStatus.cancelled,
+    ).order_by(Event.start_datetime).all()
+
+    return {
+        "events": [
+            {
+                "id": e.id,
+                "title": e.title,
+                "type": e.event_type,
+                "start": _fmt_local(e.start_datetime, tz),
+                "end": _fmt_local(e.end_datetime, tz) if e.end_datetime else None,
+                "status": e.status,
+            }
+            for e in events
+        ]
+    }
+
+
+def _exec_generate_report(args: dict, user_id: str, db: Session) -> dict:
+    """Usa rangos en UTC para que coincidan con los datos almacenados."""
+    now    = datetime.utcnow()
+    period = args["period"]
+    if period == "daily":
+        from_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        to_date   = now.replace(hour=23, minute=59, second=59)
+    elif period == "weekly":
+        from_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0)
+        to_date   = from_date + timedelta(days=6, hours=23, minutes=59)
+    else:
+        from_date = now.replace(day=1, hour=0, minute=0, second=0)
+        import calendar
+        last_day  = calendar.monthrange(now.year, now.month)[1]
+        to_date   = now.replace(day=last_day, hour=23, minute=59)
+
+    events    = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.start_datetime >= from_date,
+        Event.start_datetime <= to_date,
+    ).all()
+
+    completed = [e for e in events if e.status == EventStatus.completed]
+    pending   = [e for e in events if e.status == EventStatus.pending]
+
+    return {
+        "period":    period,
+        "total":     len(events),
+        "completed": len(completed),
+        "cancelled": len([e for e in events if e.status == EventStatus.cancelled]),
+        "pending":   len(pending),
+        "completed_list": [{"id": e.id, "title": e.title, "start": str(e.start_datetime)} for e in completed],
+        "pending_list":   [{"id": e.id, "title": e.title, "start": str(e.start_datetime)} for e in pending],
+    }
+
+
+# ---------------------------------------------------------------------------
+# DESPACHO DE TOOLS
+# ---------------------------------------------------------------------------
+def dispatch_tool(name: str, args: dict, user_id: str, db: Session, tz: ZoneInfo) -> str:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"TOOL_CALL: {name} | args={args}")
+    try:
+        if name == "create_event":
+            result = _exec_create_event(args, user_id, db, tz)
+        elif name == "update_event":
+            result = _exec_update_event(args, db, tz)
+        elif name == "cancel_event":
+            result = _exec_cancel_event(args, db)
+        elif name == "complete_event":
+            result = _exec_complete_event(args, db)
+        elif name == "snooze_event":
+            result = _exec_snooze_event(args, db)
+        elif name == "query_agenda":
+            result = _exec_query_agenda(args, user_id, db, tz)
+        elif name == "generate_report":
+            result = _exec_generate_report(args, user_id, db)
+        else:
+            result = {"error": f"Tool '{name}' no implementada"}
+        logger.info(f"TOOL_RESULT: {name} -> {str(result)[:200]}")
+    except Exception as e:
+        logger.error(f"TOOL_ERROR en '{name}': {e}", exc_info=True)
+        result = {"ok": False, "error": str(e)}
+    return json.dumps(result, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# FUNCIÓN PRINCIPAL: Procesar mensaje del usuario
+# ---------------------------------------------------------------------------
+def process_message(user_text: str, user_id: str, db: Session, timezone: str = "America/Mexico_City") -> str:
+    """
+    Procesa el texto del usuario con GPT-4o usando Function Calling.
+    Retorna el texto de respuesta final del asistente.
+    """
+    tz      = ZoneInfo(timezone)
+    now     = datetime.now(tz)
+    now_str = now.strftime("%A, %d/%m/%Y %I:%M %p")
+
+    print(f"[ARIA] process_message invocado: '{user_text[:60]}' | user={user_id} | tz={timezone}")
+
+    system_prompt = f"""Eres ARIA, asistente personal de agenda. Eres amable, directa y eficiente.
+
+FECHA Y HORA ACTUAL: {now_str} (zona: {timezone})
+
+INSTRUCCION CRITICA: Para cualquier accion sobre la agenda (crear cita, recordatorio o tarea, consultar eventos, cancelar, reagendar, completar, generar reporte), DEBES usar SIEMPRE las herramientas disponibles. NUNCA respondas como si hubieras realizado una accion sin haber llamado la herramienta correspondiente.
+
+REGLAS:
+1. Responde SIEMPRE en espanol. Sin palabras en ingles.
+2. "En X minutos" = hora actual + X minutos. Ejemplo: si son las {now_str} y el usuario dice "en 5 minutos", el start_datetime es {(datetime.now(tz) + timedelta(minutes=5)).strftime('%Y-%m-%dT%H:%M:%S')}
+3. Al confirmar una cita, di la hora en formato 12h (ej. 3:30 PM).
+4. Cuando el usuario pregunte por su agenda, llama SIEMPRE a query_agenda primero.
+5. NUNCA inventes, calcules o asumas empalmes de horario. LLAMA a create_event o update_event, y SOLO SI la herramienta te devuelve un JSON indicando conflict=True, entonces avisas al usuario para preguntar si fuerza la creacion. Si la herramienta retorna ok=True, no hay empalme.
+
+FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL. Ejemplo: {now.strftime('%Y-%m-%dT%H:%M:%S')}"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": user_text},
+    ]
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        tools=TOOLS,
+        tool_choice="auto",
+    )
+
+    # ---------------------------------------------------------------------------
+    # Bucle agéntico: el LLM puede hacer múltiples rondas de tool calls
+    # (ej: 1ra ronda query_agenda, 2da ronda create_event)
+    # ---------------------------------------------------------------------------
+    MAX_ITERATIONS = 6
+    for iteration in range(MAX_ITERATIONS):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+        )
+        msg = response.choices[0].message
+        print(f"[ARIA] iter={iteration} tool_calls={bool(msg.tool_calls)} content='{str(msg.content)[:60] if msg.content else None}'")
+
+        if not msg.tool_calls:
+            # El LLM ya no quiere llamar herramientas: respuesta final
+            return msg.content or ""
+
+        # Ejecutar todas las herramientas que el LLM pidió
+        messages.append(msg)
+        for tool_call in msg.tool_calls:
+            name   = tool_call.function.name
+            args   = json.loads(tool_call.function.arguments)
+            print(f"[ARIA] ejecutando tool: {name} | args={args}")
+            result = dispatch_tool(name, args, user_id, db, tz)
+            print(f"[ARIA] resultado {name}: {result[:120]}")
+            messages.append({
+                "role":         "tool",
+                "tool_call_id": tool_call.id,
+                "content":      result,
+            })
+
+    # Si llega aqui es que el LLM hizo demasiadas iteraciones
+    return "Lo siento, tuve un problema procesando tu solicitud. Intenta de nuevo."

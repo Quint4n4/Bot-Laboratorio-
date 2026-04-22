@@ -1,0 +1,5 @@
+[providers.python]
+install_cmd = "pip install -r requirements.txt"
+
+[phases.setup]
+nixPkgs = ["...", "ffmpeg"]

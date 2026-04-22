@@ -1,0 +1,434 @@
+"""
+main.py - Punto de entrada del Bot de Agenda en Telegram
+Agenda Bot - Asistente Personal (ARIA)
+"""
+import logging
+import os
+import tempfile
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+)
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler,
+    CallbackQueryHandler, ContextTypes, filters
+)
+
+from database import init_db, SessionLocal, User, Event, EventStatus
+from ai_handler import process_message
+from voice_handler import transcribe_voice, text_to_speech
+from scheduler import start_scheduler
+from pdf_generator import generate_productivity_report
+from ai_handler import _exec_generate_report
+
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------------------------
+def get_or_create_user(telegram_id: str, full_name: str, db) -> User:
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        user = User(telegram_id=telegram_id, full_name=full_name)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+async def send_text_and_voice(update: Update, user: User, text: str, parse_mode: str = "Markdown"):
+    """Envía un mensaje de texto y, si el usuario lo prefiere, también un audio."""
+    await update.effective_message.reply_text(text, parse_mode=parse_mode)
+    if user.voice_replies:
+        audio_path = await text_to_speech(text.replace("*", "").replace("_", ""), voice=user.voice_persona or "nova")
+        with open(audio_path, "rb") as f:
+            await update.effective_message.reply_voice(voice=f)
+        os.unlink(audio_path)
+
+
+# ---------------------------------------------------------------------------
+# /start
+# ---------------------------------------------------------------------------
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id  = str(update.effective_user.id)
+    name     = update.effective_user.first_name or "amigo"
+    db       = SessionLocal()
+    user     = get_or_create_user(user_id, name, db)
+    db.close()
+
+    welcome = (
+        f"👋 ¡Hola, *{name}*! Soy *ARIA*, tu asistente personal de agenda.\n\n"
+        "Puedo ayudarte a:\n"
+        "• ⏰ Crear recordatorios y citas\n"
+        "• 📅 Consultar tu agenda del día\n"
+        "• 🔄 Reagendar o cancelar eventos\n"
+        "• 📊 Generarte reportes en PDF\n"
+        "• 🎙️ Entender mensajes de voz\n\n"
+        "Simplemente escríbeme (o mándame una nota de voz) lo que necesitas.\n"
+        "Por ejemplo: _'Recuérdame en 10 minutos tomar agua'_ o _'¿Qué tengo para mañana?'_\n\n"
+        "Usa /ayuda para ver todos los comandos disponibles."
+    )
+    await send_text_and_voice(update, user, welcome)
+
+
+# ---------------------------------------------------------------------------
+# /ayuda
+# ---------------------------------------------------------------------------
+async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (
+        "📋 *Comandos disponibles:*\n\n"
+        "• /agenda — Ver tu agenda de hoy\n"
+        "• /semana — Ver agenda de los próximos 7 días\n"
+        "• /reporte — Reporte de productividad (diario/semanal/mensual)\n"
+        "• /voz — Activar/desactivar respuestas en audio\n"
+        "• /perfil — Ver y cambiar tu configuración\n\n"
+        "💬 *O simplemente escríbeme lo que necesitas en lenguaje natural:*\n"
+        "_'Agéndame una junta el martes a las 3 PM'_\n"
+        "_'Cancela mi cita del viernes'_\n"
+        "_'¿Tengo algo pendiente para mañana?'_\n"
+        "_'Hazme un reporte de la semana'_"
+    )
+    await update.effective_message.reply_text(text, parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
+# /agenda — Agenda del día
+# ---------------------------------------------------------------------------
+async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    user = get_or_create_user(user_id, update.effective_user.first_name, db)
+
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz  = ZoneInfo(user.timezone or "America/Mexico_City")
+    now = datetime.now(tz)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end   = now.replace(hour=23, minute=59, second=59)
+
+    events = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.start_datetime >= start,
+        Event.start_datetime <= end,
+        Event.status == EventStatus.pending,
+    ).order_by(Event.start_datetime).all()
+    db.close()
+
+    if not events:
+        await send_text_and_voice(update, user, "📭 No tienes eventos pendientes para hoy. ¡Día libre! 🎉")
+        return
+
+    lines = ["📅 *Tu agenda de hoy:*\n"]
+    for ev in events:
+        hora = ev.start_datetime.strftime("%I:%M %p").lstrip("0")
+        icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
+        lines.append(f"{icon} `{hora}` — {ev.title}  _(ID: {ev.id})_")
+
+    await send_text_and_voice(update, user, "\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# /semana — Agenda de los próximos 7 días
+# ---------------------------------------------------------------------------
+async def cmd_semana(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    user = get_or_create_user(user_id, update.effective_user.first_name, db)
+
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    tz  = ZoneInfo(user.timezone or "America/Mexico_City")
+    now = datetime.now(tz)
+    end = now + timedelta(days=7)
+
+    events = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.start_datetime >= now,
+        Event.start_datetime <= end,
+        Event.status == EventStatus.pending,
+    ).order_by(Event.start_datetime).all()
+    db.close()
+
+    if not events:
+        await update.effective_message.reply_text("📭 No tienes eventos en los próximos 7 días.")
+        return
+
+    lines = ["📅 *Eventos próximos (7 días):*\n"]
+    for ev in events:
+        fecha = ev.start_datetime.strftime("%a %d/%m  %I:%M %p")
+        icon  = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
+        lines.append(f"{icon} `{fecha}` — {ev.title}")
+
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
+# /reporte — Reporte de productividad con opciones
+# ---------------------------------------------------------------------------
+async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📅 Hoy",   callback_data="report:daily")],
+        [InlineKeyboardButton("📆 Esta semana",  callback_data="report:weekly")],
+        [InlineKeyboardButton("🗓️ Este mes",     callback_data="report:monthly")],
+    ])
+    await update.effective_message.reply_text(
+        "📊 ¿Qué período quieres reportar?",
+        reply_markup=keyboard,
+    )
+
+
+# ---------------------------------------------------------------------------
+# /voz — Toggle de respuestas de voz
+# ---------------------------------------------------------------------------
+async def cmd_voz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db      = SessionLocal()
+    user    = get_or_create_user(user_id, update.effective_user.first_name, db)
+    user.voice_replies = not user.voice_replies
+    db.commit()
+    estado = "activadas ✅" if user.voice_replies else "desactivadas ❌"
+    db.close()
+    await update.effective_message.reply_text(f"🎙️ Respuestas de voz {estado}.")
+
+
+# ---------------------------------------------------------------------------
+# /perfil — Configuración del usuario
+# ---------------------------------------------------------------------------
+async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    user = get_or_create_user(user_id, update.effective_user.first_name, db)
+    db.close()
+
+    # Voces ElevenLabs disponibles (nombre → descripción)
+    voices = {
+        "aria":    "Aria — Expresiva y natural (recomendada) 🌟",
+        "sarah":   "Sarah — Suave y clara",
+        "laura":   "Laura — Joven y amigable",
+        "paula":   "Paula — Cálida y profesional",
+        "river":   "River — Masculino, neutral",
+        "charlie": "Charlie — Masculino, casual",
+        "liam":    "Liam — Masculino, joven",
+        "eric":    "Eric — Masculino, profesional",
+    }
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            f"{'▶️ ' if user.voice_persona == v else '  '}{desc}",
+            callback_data=f"setvoice:{v}"
+        )]
+        for v, desc in voices.items()
+    ])
+
+    text = (
+        f"⚙️ *Tu perfil:*\n\n"
+        f"• Zona horaria: `{user.timezone}`\n"
+        f"• Voz actual: `{user.voice_persona}` (ElevenLabs)\n"
+        f"• Briefing matutino: `{user.morning_hour:02d}:00`\n"
+        f"• Wrap-up nocturno: `{user.evening_hour:02d}:00`\n"
+        f"• Respuestas de voz: `{'Activadas ✅' if user.voice_replies else 'Desactivadas ❌'}`\n\n"
+        "🎙️ *Elige la voz de ARIA:*"
+    )
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+
+# ---------------------------------------------------------------------------
+# HANDLER: Mensajes de texto libres
+# ---------------------------------------------------------------------------
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db      = SessionLocal()
+    user    = get_or_create_user(user_id, update.effective_user.first_name, db)
+    user_text = update.effective_message.text
+
+    await update.effective_message.reply_chat_action("typing")
+
+    response = process_message(user_text, user_id, db, timezone=user.timezone or "America/Mexico_City")
+
+    await send_text_and_voice(update, user, response)
+    db.close()
+
+
+# ---------------------------------------------------------------------------
+# HANDLER: Notas de voz
+# ---------------------------------------------------------------------------
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db      = SessionLocal()
+    user    = get_or_create_user(user_id, update.effective_user.first_name, db)
+    print(f"[VOICE] Mensaje de voz recibido de user={user_id}")
+
+    try:
+        await update.effective_message.reply_chat_action("typing")
+
+        # Descargar el archivo de voz
+        voice_file = await update.effective_message.voice.get_file()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".ogg")
+        tmp.close()
+        await voice_file.download_to_drive(tmp.name)
+        print(f"[VOICE] Audio descargado en {tmp.name}")
+
+        # Transcribir con Whisper
+        transcribed = await transcribe_voice(tmp.name)
+        os.unlink(tmp.name)
+        print(f"[VOICE] Transcripción: '{transcribed}'")
+
+        await update.effective_message.reply_text(f"🎙️ _Entendí:_ \"{transcribed}\"", parse_mode="Markdown")
+
+        # Procesar con IA
+        response = process_message(transcribed, user_id, db, timezone=user.timezone or "America/Mexico_City")
+
+        await send_text_and_voice(update, user, response)
+        db.close()
+
+    except Exception as e:
+        logger.error(f"[VOICE] Error procesando voz: {e}", exc_info=True)
+        print(f"[VOICE] ERROR: {e}")
+        try:
+            await update.effective_message.reply_text(f"❌ Error al procesar el audio: `{str(e)[:150]}`", parse_mode="Markdown")
+        except Exception:
+            pass
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+
+# ---------------------------------------------------------------------------
+# HANDLER: Botones Inline (callbacks)
+# ---------------------------------------------------------------------------
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query   = update.callback_query
+    user_id = str(query.from_user.id)
+    data    = query.data
+    db      = SessionLocal()
+    user    = get_or_create_user(user_id, query.from_user.first_name, db)
+
+    await query.answer()
+
+    try:
+        # --- Completar evento ---
+        if data.startswith("complete:"):
+            event_id = int(data.split(":")[1])
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                event.status = EventStatus.completed
+                db.commit()
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(f"✅ *Listo!* _{event.title}_ marcado como completado.", parse_mode="Markdown")
+
+        # --- Snooze 15 min ---
+        elif data.startswith("snooze15:"):
+            event_id = int(data.split(":")[1])
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                from datetime import timedelta
+                event.start_datetime = event.start_datetime + timedelta(minutes=15)
+                event.status         = EventStatus.pending
+                event.reminder_sent  = False
+                db.commit()
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(f"⏰ _{event.title}_ pospuesto 15 minutos.", parse_mode="Markdown")
+
+        # --- Cancelar evento ---
+        elif data.startswith("cancel:"):
+            event_id = int(data.split(":")[1])
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                event.status = EventStatus.cancelled
+                db.commit()
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(f"❌ _{event.title}_ cancelado.", parse_mode="Markdown")
+
+        # --- Reporte ---
+        elif data.startswith("report:"):
+            period = data.split(":")[1]
+            period_label = {"daily": "Hoy", "weekly": "Esta semana", "monthly": "Este mes"}
+
+            rd = _exec_generate_report({"period": period}, user_id, db)
+
+            await query.message.reply_text(
+                f"📊 *Reporte — {period_label.get(period, period)}*\n"
+                f"Total: *{rd['total']}*  •  ✅ {rd['completed']}  •  ⏳ {rd['pending']}",
+                parse_mode="Markdown",
+            )
+            pdf_path = generate_productivity_report(rd, period)
+            with open(pdf_path, "rb") as f:
+                await query.message.reply_document(
+                    document=f,
+                    filename=f"reporte_{period}.pdf",
+                    caption="📄 Aquí está tu reporte de productividad",
+                )
+            os.unlink(pdf_path)
+
+        # --- Cambiar voz ---
+        elif data.startswith("setvoice:"):
+            voice = data.split(":")[1]
+            user.voice_persona = voice
+            db.commit()
+            await query.edit_message_reply_markup(reply_markup=None)
+            await query.message.reply_text(f"🎙️ Voz cambiada a *{voice.capitalize()}*.", parse_mode="Markdown")
+            audio_path = await text_to_speech("¡Hola! Esta soy yo con mi nueva voz. ¿Te gusta?", voice=voice)
+            with open(audio_path, "rb") as f:
+                await query.message.reply_voice(voice=f)
+            os.unlink(audio_path)
+
+    except Exception as e:
+        logger.error(f"Error en callback '{data}': {e}", exc_info=True)
+        try:
+            await query.message.reply_text(f"❌ Error: `{str(e)[:200]}`", parse_mode="Markdown")
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+def main():
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        raise ValueError("❌ TELEGRAM_TOKEN no definido en .env")
+
+    init_db()
+
+    app = Application.builder().token(token).build()
+
+    # Comandos
+    app.add_handler(CommandHandler("start",   cmd_start))
+    app.add_handler(CommandHandler("ayuda",   cmd_ayuda))
+    app.add_handler(CommandHandler("agenda",  cmd_agenda))
+    app.add_handler(CommandHandler("semana",  cmd_semana))
+    app.add_handler(CommandHandler("reporte", cmd_reporte))
+    app.add_handler(CommandHandler("voz",     cmd_voz))
+    app.add_handler(CommandHandler("perfil",  cmd_perfil))
+
+    # Mensajes libres
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
+    # Callbacks de botones
+    app.add_handler(CallbackQueryHandler(handle_callback))
+
+    async def on_startup(application):
+        start_scheduler(application.bot)
+        logger.info("🚀 ARIA Bot iniciado. Esperando mensajes...")
+
+    app.post_init = on_startup
+
+    logger.info("🚀 Arrancando ARIA Bot...")
+    app.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    main()
