@@ -848,6 +848,9 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 - PRECIO MÁXIMO SUGERIDO: $724
 - Muestra requerida: Suero Tubo rojo o amarillo
 
+## DHES
+- PRECIO MÁXIMO SUGERIDO: $500
+
 
 
 ---
