@@ -177,9 +177,9 @@ def _check_conflicts(start_utc: datetime, end_utc: datetime, user_id: str, db: S
 
 
 def _fmt_local(utc_dt: datetime, tz: ZoneInfo) -> str:
-    """Formatea un datetime UTC a hora local 12h."""
+    """Formatea un datetime UTC a hora local incluyendo la fecha."""
     local = utc_dt.replace(tzinfo=dt_timezone.utc).astimezone(tz)
-    return local.strftime("%I:%M %p").lstrip("0")
+    return local.strftime("%Y-%m-%d %I:%M %p")
 
 
 # ---------------------------------------------------------------------------
