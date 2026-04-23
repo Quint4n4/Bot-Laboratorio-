@@ -12,8 +12,11 @@ import enum
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Usará DATABASE_URL del entorno si existe (ej. PostgreSQL en Railway), de lo contrario usará archivo local local.
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'agenda.db')}")
+# Se exige la variable DB_URL_REAL explícita para evitar colisiones en Railway
+DATABASE_URL = os.getenv("DB_URL_REAL")
+
+if not DATABASE_URL:
+    raise ValueError("❌ ERROR FATAL: No se encontró la variable de entorno 'DB_URL_REAL'. ¡Configúrala en Railway apuntando a tu PostgreSQL!")
 
 # Configuración del engine (check_same_thread es solo para SQLite)
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
