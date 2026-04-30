@@ -27,7 +27,7 @@ def _require(key: str) -> str:
 
 
 def _optional(key: str, default: str = "") -> str:
-    return os.getenv(key, default).strip()
+    return os.getenv(key, default).strip().strip('"').strip("'")
 
 
 class _Settings:
