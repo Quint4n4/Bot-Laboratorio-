@@ -468,6 +468,14 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 - Muestra requerida: Heces Frasco esteril
 - Tiempo: 2-8 hrs
 
+## CORTISOL POR INMUNOFLUORESCENCIA
+- PRECIO SIN IVA: $300
+- PRECIO CON IVA: $0
+- PRECIO MÍNIMO SUGERIDO: $0
+- PRECIO MÁXIMO SUGERIDO: $500
+- Muestra requerida: Suero Tubo rojo o amarillo
+- Tiempo: 2-8 hrs
+
 ## CREATININA SERICA
 - PRECIO SIN IVA: $45
 - PRECIO CON IVA: $52
@@ -602,6 +610,14 @@ INSTRUCCIÓN IMPORTANTE: Usa SIEMPRE el campo 'PRECIO MÁXIMO SUGERIDO' para cot
 - PRECIO MÍNIMO SUGERIDO: $558
 - PRECIO MÁXIMO SUGERIDO: $837
 - Muestra requerida: Orina Frasco esteril
+- Tiempo: 2-8 hrs
+
+## DESHIDROEPIANDROSTERONA SULFATO (DHEA-S)
+- PRECIO SIN IVA: $380
+- PRECIO CON IVA: $0
+- PRECIO MÍNIMO SUGERIDO: $0
+- PRECIO MÁXIMO SUGERIDO: $550
+- Muestra requerida: Suero Tubo rojo o amarillo
 - Tiempo: 2-8 hrs
 
 ## DESHIDROGENASA  LACTICA
