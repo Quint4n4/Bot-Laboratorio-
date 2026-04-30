@@ -200,49 +200,44 @@ async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: st
         
     items = []
     subtotal = 0.0
+    total_min_sug = 0.0
+    total_con_iva = 0.0
+    total_max_sug = 0.0
     for c in lista_cotizacion:
         nombre = c.get("estudio", c.get("nombre", "Estudio Desconocido"))
-        
-        if is_internal:
-            # En cotización interna cobramos precio maquila
-            precio = float(c.get("precio_min", c.get("precio", 0)))
-        else:
-            # En cotización normal cobramos precio máximo
-            precio = float(c.get("precio", 0))
-            
+
+        precio = float(c.get("precio", 0))
+        precio_min = float(c.get("precio_min", 0))
+        precio_con_iva = float(c.get("precio_con_iva", 0))
+
         recomendacion = c.get("recomendacion", "")
         tiempo = c.get("tiempo", "")
         preparacion = _get_preparacion(nombre)
-        
-        items.append({
-            "nombre": nombre,
-            "precio": f"{precio:.2f}",
-            "recomendacion": recomendacion,
-            "tiempo": tiempo,
-            "preparacion": preparacion
-        })
-        subtotal += precio
 
-    # Matemáticas internas
-    if is_internal:
-        subtotal_sin_iva = subtotal / 1.16
-        iva_calculado = subtotal - subtotal_sin_iva
-        total_final = subtotal
-    else:
-        # Externo no lleva desglose en este caso, o es igual
-        subtotal_sin_iva = 0
-        iva_calculado = 0
-        total_final = subtotal
-    
+        items.append({
+            "nombre":         nombre,
+            "precio":         f"{precio:.2f}",
+            "precio_min":     f"{precio_min:.2f}",
+            "precio_con_iva": f"{precio_con_iva:.2f}",
+            "recomendacion":  recomendacion,
+            "tiempo":         tiempo,
+            "preparacion":    preparacion,
+        })
+        subtotal      += precio
+        total_min_sug += precio_min
+        total_con_iva += precio_con_iva
+        total_max_sug += precio
+
     # 5. Renderizar HTML
     rendered_html = template.render(
         logo_data=logo_data,
         fecha=fecha_formateada,
         paciente_nombre=patient_name,
         items=items,
-        total=f"{total_final:.2f}",
-        subtotal=f"{subtotal_sin_iva:.2f}",
-        iva=f"{iva_calculado:.2f}"
+        total=f"{subtotal:.2f}",
+        total_min_sug=f"{total_min_sug:.2f}",
+        total_con_iva=f"{total_con_iva:.2f}",
+        total_max_sug=f"{total_max_sug:.2f}",
     )
     
     # 6. Generar PDF con Playwright

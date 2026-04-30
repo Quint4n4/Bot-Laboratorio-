@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotización OPLAB Interna — Preview</title>
+<style>
+* {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  box-sizing: border-box;
+  margin: 0; padding: 0;
+}
+body { font-family: Arial, Helvetica, sans-serif; background: #e8e8e8; color: #1a1a1a; font-size: 11pt; }
+
+.page1 {
+  width: 816px;
+  min-height: 1056px;
+  background: #fff;
+  margin: 32px auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  padding: 46px 56px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.logo-placeholder {
+  width: 120px; height: 70px;
+  background: #eef2fa;
+  border: 2px dashed #132454;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10pt; color: #132454; font-weight: bold;
+}
+.header-date { font-size: 13pt; color: #444; }
+
+.title {
+  color: #4a4a4a;
+  font-size: 22pt;
+  font-weight: bold;
+  margin-bottom: 18px;
+}
+
+.info-center {
+  text-align: center;
+  font-size: 11pt;
+  margin-bottom: 30px;
+  color: #333;
+}
+.info-center strong {
+  color: #132454;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12pt;
+}
+
+.patient-info { margin-bottom: 20px; font-size: 12pt; }
+
+table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+th {
+  background-color: #132454;
+  color: white;
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11pt;
+}
+td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 11pt;
+  vertical-align: top;
+}
+.study-name { font-weight: bold; display: block; }
+.study-sample { font-size: 8.5pt; color: #666; display: block; margin-top: 2px; }
+.total-row td {
+  font-weight: bold;
+  font-size: 12pt;
+  border-bottom: none;
+  border-top: 2px solid #132454;
+  padding-top: 12px;
+}
+.text-right { text-align: right; }
+
+.footer-bar {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #ccc;
+  padding-top: 14px;
+  margin-top: 20px;
+  font-size: 9.5pt;
+  color: #444;
+}
+.footer-bar .left { width: 40%; }
+.footer-bar .right { width: 56%; text-align: right; }
+</style>
+</head>
+<body>
+
+<div class="page1">
+
+  <div class="header">
+    <div class="logo-placeholder">OPLAB Logo</div>
+    <div class="header-date">06 de Abril del 2026</div>
+  </div>
+
+  <div class="title">Control Interno (Costo Maquila)</div>
+
+  <div class="info-center">
+    <strong>OPLAB Operadora de Laboratorios</strong>
+    Av Costera Miguel Aleman 2112-E-Local 16, La Condesa, CP 39690<br>
+    Acapulco de Juarez, Guerrero<br>
+    Tel: 7444403876 y 7445336188
+  </div>
+
+  <div class="patient-info">
+    <strong>Paciente:</strong> Jose Eduardo De La O Galeana
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Estudio / Análisis</th>
+        <th class="text-right" style="width:110px;">Mín Sugerido</th>
+        <th class="text-right" style="width:110px;">Con IVA</th>
+        <th class="text-right" style="width:110px;">Máx Sugerido</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <span class="study-name">BIOMETRÍA HEMÁTICA</span>
+          <span class="study-sample">Muestra: Sangre total Tubo lila</span>
+        </td>
+        <td class="text-right">$143.00</td>
+        <td class="text-right">$110.00</td>
+        <td class="text-right">$215.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">QUÍMICA SANGUÍNEA 12 ELEMENTOS (QS6 Y LÍPIDOS)</span>
+          <span class="study-sample">Muestra: Suero Tubo rojo o amarillo</span>
+        </td>
+        <td class="text-right">$385.00</td>
+        <td class="text-right">$296.00</td>
+        <td class="text-right">$580.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">PROTEINA C REACTIVA ULTRASENSIBLE (hsCRP)</span>
+          <span class="study-sample">Muestra: Suero Tubo rojo o amarillo</span>
+        </td>
+        <td class="text-right">$280.00</td>
+        <td class="text-right">$215.00</td>
+        <td class="text-right">$420.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">EXAMEN GENERAL DE ORINA</span>
+          <span class="study-sample">Muestra: Orina Frasco esteril</span>
+        </td>
+        <td class="text-right">$80.00</td>
+        <td class="text-right">$62.00</td>
+        <td class="text-right">$120.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">PERFIL HEPÁTICO BÁSICO</span>
+          <span class="study-sample">Muestra: Suero Tubo rojo o amarillo</span>
+        </td>
+        <td class="text-right">$360.00</td>
+        <td class="text-right">$278.00</td>
+        <td class="text-right">$540.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">REACCIONES FEBRILES</span>
+          <span class="study-sample">Muestra: Suero Tubo rojo o amarillo</span>
+        </td>
+        <td class="text-right">$185.00</td>
+        <td class="text-right">$144.00</td>
+        <td class="text-right">$280.00</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="study-name">HEMOGLOBINA GLICADA</span>
+          <span class="study-sample">Muestra: Sangre total Tubo lila</span>
+        </td>
+        <td class="text-right">$225.00</td>
+        <td class="text-right">$174.00</td>
+        <td class="text-right">$340.00</td>
+      </tr>
+      <tr class="total-row">
+        <td class="text-right" style="font-size: 13pt;">TOTAL:</td>
+        <td class="text-right" style="font-size: 13pt;">$1658.00</td>
+        <td class="text-right" style="font-size: 13pt;">$1279.00</td>
+        <td class="text-right" style="font-size: 13pt;">$2495.00</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer-bar">
+    <div class="left">Reporte confidencial de costos de estudio interno.</div>
+    <div class="right">Precios tomados directamente del catálogo de maquila 2026. Documento no válido para el paciente.</div>
+  </div>
+
+</div>
+
+</body>
+</html>

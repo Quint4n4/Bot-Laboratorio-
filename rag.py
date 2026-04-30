@@ -31,27 +31,38 @@ print(f"Catalogo cargado: {len(CATALOG_COMPLETO.splitlines())} lineas.")
 def _parse_catalog_to_dict() -> dict:
     """
     Parsea conocimiento.md y devuelve:
-      { "NOMBRE ESTUDIO": {precio_max, precio_min, muestra} }
+      { "NOMBRE ESTUDIO": {precio_sin_iva, precio_con_iva,
+                           precio_min, precio_max, muestra} }
     """
     catalog: dict = {}
     current_name: str | None = None
     current_data: dict = {}
+
+    def _money(line: str) -> float:
+        m = re.search(r'\$([0-9,]+(?:\.\d+)?)', line)
+        return float(m.group(1).replace(",", "")) if m else 0.0
 
     for line in CATALOG_COMPLETO.splitlines():
         if line.startswith("## "):
             if current_name:
                 catalog[current_name] = current_data
             current_name = line[3:].strip()
-            current_data = {"precio_max": 0.0, "precio_min": 0.0, "muestra": ""}
+            current_data = {
+                "precio_sin_iva": 0.0,
+                "precio_con_iva": 0.0,
+                "precio_min": 0.0,
+                "precio_max": 0.0,
+                "muestra": "",
+            }
         elif current_name:
-            if "PRECIO MÁXIMO SUGERIDO" in line:
-                m = re.search(r'\$([0-9,]+(?:\.\d+)?)', line)
-                if m:
-                    current_data["precio_max"] = float(m.group(1).replace(",", ""))
+            if "PRECIO SIN IVA" in line:
+                current_data["precio_sin_iva"] = _money(line)
+            elif "PRECIO CON IVA" in line:
+                current_data["precio_con_iva"] = _money(line)
+            elif "PRECIO MÁXIMO SUGERIDO" in line:
+                current_data["precio_max"] = _money(line)
             elif "PRECIO MÍNIMO SUGERIDO" in line:
-                m = re.search(r'\$([0-9,]+(?:\.\d+)?)', line)
-                if m:
-                    current_data["precio_min"] = float(m.group(1).replace(",", ""))
+                current_data["precio_min"] = _money(line)
             elif "Muestra requerida" in line:
                 current_data["muestra"] = line.split(":", 1)[1].strip()
 
@@ -161,11 +172,13 @@ def generate_rag_response(query: str) -> dict:
             entry = CATALOG_DICT.get(nombre)
             if entry and entry["precio_max"] > 0:
                 cotizacion.append({
-                    "estudio":       nombre,
-                    "precio":        entry["precio_max"],
-                    "precio_min":    entry["precio_min"],
-                    "recomendacion": entry["muestra"],
-                    "tiempo":        "2-8 horas",
+                    "estudio":        nombre,
+                    "precio":         entry["precio_max"],
+                    "precio_min":     entry["precio_min"],
+                    "precio_sin_iva": entry["precio_sin_iva"],
+                    "precio_con_iva": entry["precio_con_iva"],
+                    "recomendacion":  entry["muestra"],
+                    "tiempo":         "2-8 horas",
                 })
             else:
                 # Nombre que GPT devolvió pero no existe en el índice

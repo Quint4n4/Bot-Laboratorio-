@@ -231,7 +231,9 @@
         <thead>
             <tr>
                 <th>Estudio / Análisis</th>
-                <th class="text-right" style="width:130px;">Precio</th>
+                <th class="text-right" style="width:110px;">Mín Sugerido</th>
+                <th class="text-right" style="width:110px;">Con IVA</th>
+                <th class="text-right" style="width:110px;">Máx Sugerido</th>
             </tr>
         </thead>
         <tbody>
@@ -243,28 +245,23 @@
                     <span class="study-sample">Muestra: {{ item.recomendacion }}</span>
                     {% endif %}
                 </td>
+                <td class="text-right">${{ item.precio_min }}</td>
+                <td class="text-right">${{ item.precio_con_iva }}</td>
                 <td class="text-right">${{ item.precio }}</td>
             </tr>
             {% endfor %}
-            </style> <!-- We don't need modifications to style actually, just html -->
-            <tr style="border-top: 1px solid #132454;">
-                <td class="text-right" style="padding-top: 10px; font-weight: bold;">Subtotal:</td>
-                <td class="text-right" style="padding-top: 10px; font-weight: bold;">${{ subtotal }}</td>
-            </tr>
-            <tr>
-                <td class="text-right" style="font-weight: bold;">IVA (16%):</td>
-                <td class="text-right" style="font-weight: bold;">${{ iva }}</td>
-            </tr>
             <tr class="total-row">
-                <td class="text-right" style="font-size: 14pt;">Costo Total Maquila:</td>
-                <td class="text-right" style="font-size: 14pt;">${{ total }}</td>
+                <td class="text-right" style="font-size: 13pt;">TOTAL:</td>
+                <td class="text-right" style="font-size: 13pt;">${{ total_min_sug }}</td>
+                <td class="text-right" style="font-size: 13pt;">${{ total_con_iva }}</td>
+                <td class="text-right" style="font-size: 13pt;">${{ total_max_sug }}</td>
             </tr>
         </tbody>
     </table>
 
     <div class="footer-bar">
         <div class="left">Reporte confidencial de costos de estudio interno.</div>
-        <div class="right">Las cantidades incluyen el IVA aplicado del 16% sobre la franja del Subtotal. Documento no válido para el paciente.</div>
+        <div class="right">Precios tomados directamente del catálogo de maquila 2026. Documento no válido para el paciente.</div>
     </div>
 
 </div>
