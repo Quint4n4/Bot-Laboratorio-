@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 from config import settings
-from rag import generate_rag_response, transcribe_audio
+from rag import generate_rag_response, transcribe_audio, parse_price_change
 from pdf_service import create_quote_pdf
 from paquetes import get_menu_text, get_paquete, PAQUETES
 from db import init_db, save_cotizacion
@@ -13,7 +13,13 @@ from db import init_db, save_cotizacion
 # ─────────────────────────────────────────────────────────────
 # Estados
 # ─────────────────────────────────────────────────────────────
-ESPERANDO_ESTUDIOS, ESPERANDO_NOMBRE, ESPERANDO_DESCARTE, ESPERANDO_ACLARACION = range(4)
+(
+    ESPERANDO_ESTUDIOS,
+    ESPERANDO_NOMBRE,
+    ESPERANDO_DESCARTE,
+    ESPERANDO_ACLARACION,
+    ESPERANDO_CONFIRMACION_PRECIOS,
+) = range(5)
 
 PALABRAS_SI = {"si", "sí", "yes", "descartar", "descarta", "omitir", "eliminar",
                "s", "dale", "ok", "okay", "adelante", "continuar", "continúa"}
@@ -57,6 +63,27 @@ async def _enviar_descarte(update: Update, cotizacion_valida: list, no_encontrad
         parse_mode="Markdown"
     )
     return ESPERANDO_DESCARTE
+
+async def _enviar_lista_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Muestra estudios + precios y pide confirmación del usuario."""
+    ia_json = context.user_data.get("ia_json", {})
+    cot = ia_json.get("cotizacion", [])
+    if not cot:
+        await update.message.reply_text("No hay estudios para confirmar.")
+        return ESPERANDO_ESTUDIOS
+
+    lineas = ["📋 *Revisa los precios antes de generar el PDF:*\n"]
+    for i, c in enumerate(cot, 1):
+        lineas.append(f"{i}. *{c['estudio']}* — ${float(c['precio']):.2f}")
+    total = sum(float(c["precio"]) for c in cot)
+    lineas.append(f"\n💰 *Total: ${total:.2f}*")
+    lineas.append("")
+    lineas.append("¿Los precios están bien?")
+    lineas.append("• Responde *Sí / OK / Correcto* para continuar")
+    lineas.append("• O escribe el cambio (ej: _\"cambia biometría a 250\"_)")
+    await update.message.reply_text("\n".join(lineas), parse_mode="Markdown")
+    return ESPERANDO_CONFIRMACION_PRECIOS
+
 
 async def _enviar_aclaracion(update: Update, ambiguos: list, cotizacion_ok: list) -> int:
     """Pide aclaración para el primer estudio ambiguo pendiente."""
@@ -116,12 +143,7 @@ async def _evaluar_resultado(update: Update, context: ContextTypes.DEFAULT_TYPE,
         total = _calcular_total(cotizacion)
         total_min = _calcular_total_min(cotizacion)
         context.user_data["ia_json"] = {"cotizacion": cotizacion, "total": total, "total_min": total_min, "genera_pdf": True}
-        await update.message.reply_text(
-            f"{ia.get('mensaje', '¡Listo!')}\n\n"
-            "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
-            parse_mode="Markdown"
-        )
-        return ESPERANDO_NOMBRE
+        return await _enviar_lista_precios(update, context)
 
     # ── CASO 2: Hay ambigüedad en algún estudio ──────────────
     if ambiguos:
@@ -248,7 +270,7 @@ async def handle_aclaracion(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             }
             return await _enviar_descarte(update, cotizacion_confirmada, no_encontrados)
 
-        # Todo resuelto → pedir nombre
+        # Todo resuelto → confirmar precios
         total = _calcular_total(cotizacion_confirmada)
         total_min = _calcular_total_min(cotizacion_confirmada)
         context.user_data["ia_json"] = {
@@ -259,11 +281,10 @@ async def handle_aclaracion(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         }
         nombres = ", ".join(c.get("estudio", "") for c in cotizacion_confirmada)
         await update.message.reply_text(
-            f"✅ Perfecto. Cotización con: *{nombres}*\n\n"
-            "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
+            f"✅ Perfecto. Cotización con: *{nombres}*",
             parse_mode="Markdown"
         )
-        return ESPERANDO_NOMBRE
+        return await _enviar_lista_precios(update, context)
 
     except Exception as e:
         print("Error en aclaracion:", e)
@@ -294,11 +315,10 @@ async def handle_descarte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         }
         nombres = ", ".join(c.get("estudio", "") for c in cotizacion_valida)
         await update.message.reply_text(
-            f"✅ Continuamos con: *{nombres}*\n\n"
-            "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
+            f"✅ Continuamos con: *{nombres}*",
             parse_mode="Markdown"
         )
-        return ESPERANDO_NOMBRE
+        return await _enviar_lista_precios(update, context)
 
     # ── El usuario escribe un nombre alternativo ──────────────
     nuevo_nombre = update.message.text.strip()
@@ -328,11 +348,10 @@ async def handle_descarte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             }
             nombres = ", ".join(c.get("estudio", "") for c in cotizacion_total)
             await update.message.reply_text(
-                f"✅ ¡Encontrado! Cotización completa con: *{nombres}*\n\n"
-                "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
+                f"✅ ¡Encontrado! Cotización completa con: *{nombres}*",
                 parse_mode="Markdown"
             )
-            return ESPERANDO_NOMBRE
+            return await _enviar_lista_precios(update, context)
 
         if nuevo_ambiguo:
             # Hay ambigüedad en el nuevo nombre
@@ -354,6 +373,72 @@ async def handle_descarte(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         print("Error en descarte:", e)
         await update.message.reply_text("❌ Error buscando el estudio. Intenta de nuevo.")
         return ESPERANDO_DESCARTE
+
+# ─────────────────────────────────────────────────────────────
+# Handler: Confirmación de precios
+# ─────────────────────────────────────────────────────────────
+async def handle_confirmacion_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    respuesta = update.message.text.strip()
+    ia_json = context.user_data.get("ia_json", {})
+    cotizacion = ia_json.get("cotizacion", [])
+
+    if not cotizacion:
+        await update.message.reply_text("Sesión caducada. ¿Qué estudios quieres cotizar?")
+        return ESPERANDO_ESTUDIOS
+
+    if respuesta.lower() in PALABRAS_SI:
+        await update.message.reply_text(
+            "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
+            parse_mode="Markdown",
+        )
+        return ESPERANDO_NOMBRE
+
+    msg_wait = await update.message.reply_text("⏳ Procesando cambio...")
+    try:
+        parsed = parse_price_change(respuesta, cotizacion)
+        await context.bot.delete_message(
+            chat_id=update.message.chat_id, message_id=msg_wait.message_id
+        )
+
+        intent = parsed.get("intent")
+        idx = parsed.get("estudio_idx")
+        nuevo = parsed.get("nuevo_precio")
+
+        if intent == "confirm":
+            await update.message.reply_text(
+                "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
+                parse_mode="Markdown",
+            )
+            return ESPERANDO_NOMBRE
+
+        if intent == "change" and idx is not None and nuevo is not None and 0 <= idx < len(cotizacion):
+            anterior = float(cotizacion[idx]["precio"])
+            cotizacion[idx]["precio"] = float(nuevo)
+            ia_json["total"] = sum(float(c["precio"]) for c in cotizacion)
+            context.user_data["ia_json"] = ia_json
+            await update.message.reply_text(
+                f"✏️ *{cotizacion[idx]['estudio']}*: ${anterior:.2f} → ${float(nuevo):.2f}",
+                parse_mode="Markdown",
+            )
+            return await _enviar_lista_precios(update, context)
+
+        await update.message.reply_text(
+            "No entendí el cambio. Ejemplos:\n"
+            "• _\"cambia biometría a 250\"_\n"
+            "• _\"el examen de orina vale 100\"_\n"
+            "• _\"sí\"_ para confirmar tal cual.",
+            parse_mode="Markdown",
+        )
+        return ESPERANDO_CONFIRMACION_PRECIOS
+
+    except Exception as e:
+        print("Error en confirmacion_precios:", e)
+        await context.bot.delete_message(
+            chat_id=update.message.chat_id, message_id=msg_wait.message_id
+        )
+        await update.message.reply_text("❌ Error procesando tu respuesta. Intenta de nuevo.")
+        return ESPERANDO_CONFIRMACION_PRECIOS
+
 
 # ─────────────────────────────────────────────────────────────
 # Handler: Nombre del paciente → generar PDF
@@ -455,6 +540,9 @@ def main():
             ESPERANDO_DESCARTE: [
                 MessageHandler(text_filter, handle_descarte),
                 MessageHandler(voice_filter, handle_voice_message),
+            ],
+            ESPERANDO_CONFIRMACION_PRECIOS: [
+                MessageHandler(text_filter, handle_confirmacion_precios),
             ],
             ESPERANDO_NOMBRE: [
                 MessageHandler(text_filter, handle_patient_name),

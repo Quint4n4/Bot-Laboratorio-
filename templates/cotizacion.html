@@ -311,14 +311,14 @@ td:last-child { text-align: center; }
       <thead>
         <tr>
           <th>Estudio</th>
-          <th>Costo</th>
+          <th>Tiempo</th>
         </tr>
       </thead>
       <tbody>
         {% for item in items %}
         <tr>
           <td>{{ item.nombre | title }}</td>
-          <td>${{ item.precio }}</td>
+          <td>{{ item.tiempo }}</td>
         </tr>
         {% endfor %}
       </tbody>

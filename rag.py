@@ -53,6 +53,7 @@ def _parse_catalog_to_dict() -> dict:
                 "precio_min": 0.0,
                 "precio_max": 0.0,
                 "muestra": "",
+                "tiempo": "2-8 horas",
             }
         elif current_name:
             if "PRECIO SIN IVA" in line:
@@ -65,6 +66,8 @@ def _parse_catalog_to_dict() -> dict:
                 current_data["precio_min"] = _money(line)
             elif "Muestra requerida" in line:
                 current_data["muestra"] = line.split(":", 1)[1].strip()
+            elif line.lstrip("- ").startswith("Tiempo"):
+                current_data["tiempo"] = line.split(":", 1)[1].strip()
 
     if current_name:
         catalog[current_name] = current_data
@@ -178,7 +181,7 @@ def generate_rag_response(query: str) -> dict:
                     "precio_sin_iva": entry["precio_sin_iva"],
                     "precio_con_iva": entry["precio_con_iva"],
                     "recomendacion":  entry["muestra"],
-                    "tiempo":         "2-8 horas",
+                    "tiempo":         entry.get("tiempo", "2-8 horas"),
                 })
             else:
                 # Nombre que GPT devolvió pero no existe en el índice
@@ -209,3 +212,45 @@ def generate_rag_response(query: str) -> dict:
             "total":          0,
             "total_min":      0,
         }
+
+
+# ─────────────────────────────────────────────────────────────
+# Parser de cambios de precio
+# Devuelve {intent: confirm|change|unclear, estudio_idx, nuevo_precio}
+# ─────────────────────────────────────────────────────────────
+def parse_price_change(message: str, cotizacion: list) -> dict:
+    lista_txt = "\n".join(
+        f"{i+1}. {c['estudio']} - ${c['precio']:.2f}"
+        for i, c in enumerate(cotizacion)
+    )
+    prompt = f"""El usuario está revisando los precios de una cotización médica.
+Lista actual:
+{lista_txt}
+
+El usuario respondió: "{message}"
+
+Determina si está confirmando, pidiendo cambiar un precio, o algo poco claro.
+
+Responde SOLO con JSON:
+{{
+  "intent": "confirm" | "change" | "unclear",
+  "estudio_idx": 0-based index si intent=change, sino null,
+  "nuevo_precio": número decimal sin signo $ si intent=change, sino null
+}}
+
+Reglas:
+- intent=confirm si dice si/sí/ok/correcto/listo/dale/adelante/perfecto/asi esta bien.
+- intent=change si menciona un estudio (por nombre o número) y un nuevo precio.
+- intent=unclear si no encaja en lo anterior.
+"""
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        print("parse_price_change error:", e)
+        return {"intent": "unclear", "estudio_idx": None, "nuevo_precio": None}

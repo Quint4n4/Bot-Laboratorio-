@@ -231,7 +231,7 @@
         <thead>
             <tr>
                 <th>Estudio / Análisis</th>
-                <th class="text-right" style="width:110px;">Mín Sugerido</th>
+                <th class="text-right" style="width:110px;">Sin IVA</th>
                 <th class="text-right" style="width:110px;">Con IVA</th>
                 <th class="text-right" style="width:110px;">Máx Sugerido</th>
             </tr>
@@ -245,14 +245,14 @@
                     <span class="study-sample">Muestra: {{ item.recomendacion }}</span>
                     {% endif %}
                 </td>
-                <td class="text-right">${{ item.precio_min }}</td>
+                <td class="text-right">${{ item.precio_sin_iva }}</td>
                 <td class="text-right">${{ item.precio_con_iva }}</td>
                 <td class="text-right">${{ item.precio }}</td>
             </tr>
             {% endfor %}
             <tr class="total-row">
                 <td class="text-right" style="font-size: 13pt;">TOTAL:</td>
-                <td class="text-right" style="font-size: 13pt;">${{ total_min_sug }}</td>
+                <td class="text-right" style="font-size: 13pt;">${{ total_sin_iva }}</td>
                 <td class="text-right" style="font-size: 13pt;">${{ total_con_iva }}</td>
                 <td class="text-right" style="font-size: 13pt;">${{ total_max_sug }}</td>
             </tr>
