@@ -2,12 +2,13 @@ import asyncio
 import os
 import tempfile
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 from config import settings
 from rag import generate_rag_response, transcribe_audio
 from pdf_service import create_quote_pdf
 from paquetes import get_menu_text, get_paquete, PAQUETES
+from db import init_db, save_cotizacion
 
 # ─────────────────────────────────────────────────────────────
 # Estados
@@ -211,7 +212,7 @@ async def handle_aclaracion(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         consulta = (
             f"El usuario está eligiendo entre estas opciones del catálogo: {opciones}.\n"
             f"El usuario respondió: '{respuesta}'.\n"
-            f"Determina cuál opción eligió y devuelve su precio y muestra."
+            f"Determina cuál opción eligió y ponla en 'identificados'."
         )
         ia = generate_rag_response(consulta)
         await context.bot.delete_message(chat_id=chat_id, message_id=msg_wait.message_id)
@@ -370,8 +371,10 @@ async def handle_patient_name(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📄 Generando cotización para *{patient_name}*...", parse_mode="Markdown"
     )
     try:
-        pdf_path = await create_quote_pdf(ia_json, patient_name, "cotizacion_oplab.pdf")
-        internal_pdf_path = await create_quote_pdf(ia_json, patient_name, "cotizacion_interna_oplab.pdf", is_internal=True)
+        import time
+        unique_id = f"{chat_id}_{int(time.time())}"
+        pdf_path = await create_quote_pdf(ia_json, patient_name, f"cotizacion_{unique_id}.pdf")
+        internal_pdf_path = await create_quote_pdf(ia_json, patient_name, f"cotizacion_interna_{unique_id}.pdf", is_internal=True)
         await context.bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
 
         with open(pdf_path, "rb") as f_ext, open(internal_pdf_path, "rb") as f_int:
@@ -387,6 +390,21 @@ async def handle_patient_name(update: Update, context: ContextTypes.DEFAULT_TYPE
                 filename=f"INTERNO_Laboratorio_{patient_name.replace(' ', '_')}.pdf",
                 caption="🔒 Adjunto el reporte contable interno (Costo Maquila Desglosado)."
             )
+        import os as _os
+        _os.unlink(pdf_path)
+        _os.unlink(internal_pdf_path)
+
+        try:
+            await save_cotizacion(
+                chat_id,
+                patient_name,
+                ia_json["cotizacion"],
+                ia_json["total"],
+                ia_json.get("total_min", 0),
+            )
+        except Exception as db_err:
+            print("DB audit error (non-fatal):", db_err)
+
         context.user_data.clear()
 
     except Exception as e:
@@ -408,9 +426,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ─────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────
+async def _post_init(application: Application) -> None:
+    await init_db()
+
+
 def main():
     print("🚀 Levantando Bot OPLAB...")
-    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).post_init(_post_init).build()
 
     text_filter  = filters.TEXT & (~filters.COMMAND)
     voice_filter = filters.VOICE

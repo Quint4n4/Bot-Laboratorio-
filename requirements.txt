@@ -1,16 +1,13 @@
-# ─── HTTP & API ───────────────────────────────────────────────
-requests>=2.31.0
+# ─── IA ───────────────────────────────────────────────────────
+openai>=1.30.0
 
-# ─── Base de datos & RAG ──────────────────────────────────────
-supabase>=2.4.0        # cliente oficial de Supabase (PostgreSQL + pgvector)
-openai>=1.30.0         # embeddings (text-embedding-3-small) + completions
+# ─── Bot & PDF ────────────────────────────────────────────────
+python-telegram-bot>=21.0
+playwright>=1.40.0
+Jinja2>=3.1.0
+
+# ─── Base de datos ────────────────────────────────────────────
+asyncpg>=0.29.0
 
 # ─── Utilidades ───────────────────────────────────────────────
-python-dotenv>=1.0.0   # gestión de variables de entorno (.env)
-Pillow>=10.0.0         # manipulación / visualización de imágenes QR
-
-# ─── Bot & PDF ──────────────────────────────────────────
-playwright>=1.40.0     # Motor Chromium para renderizado robusto
-Jinja2>=3.1.0          # Motor de plantillas HTML
-python-telegram-bot>=21.0
-
+python-dotenv>=1.0.0

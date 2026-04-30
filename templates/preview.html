@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotización OPLAB — Preview</title>
+<style>
+* {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  box-sizing: border-box;
+  margin: 0; padding: 0;
+}
+body { font-family: Arial, Helvetica, sans-serif; background: #e8e8e8; }
+
+.pag1 {
+  width: 816px;
+  min-height: 1056px;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  margin: 32px auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+}
+
+/* ── Formas decorativas ──────────────────────────────────────
+   Círculos grandes centrados FUERA de la página.
+   Centro calculado: navy (849,-202) r=403, gray (819,-202) r=403
+   → arco interno despeja el área del logo/fecha (x>560 a y≈80)
+─────────────────────────────────────────────────────────── */
+.tr-gray {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #8d98a8;
+  top: -605px; right: -406px;   /* centro (819, -202) */
+  z-index: 1;
+}
+.tr-navy {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #132454;
+  top: -605px; right: -436px;   /* centro (849, -202) */
+  z-index: 2;
+}
+.tr-gold {
+  position: absolute;
+  width: 250px; height: 52px;
+  border-radius: 26px;
+  background: #F0A020;
+  top: 118px; right: -24px;
+  transform: rotate(15deg);
+  z-index: 3;
+}
+.bl-navy {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #132454;
+  bottom: -605px; left: -436px;  /* espejo de tr-navy */
+  z-index: 1;
+}
+.bl-gold {
+  position: absolute;
+  width: 250px; height: 52px;
+  border-radius: 26px;
+  background: #F0A020;
+  bottom: 118px; left: -24px;
+  transform: rotate(-165deg);
+  z-index: 2;
+}
+.br-navy {
+  position: absolute;
+  width: 210px; height: 88px;
+  border-radius: 44px;
+  background: #132454;
+  bottom: 12px; right: -28px;
+  transform: rotate(-11deg);
+  z-index: 1;
+}
+
+/* ── Contenido ── */
+.contenido {
+  position: relative;
+  z-index: 10;
+  padding: 46px 62px 38px 56px;
+}
+.header {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+.logo-placeholder {
+  width: 120px; height: 70px;
+  background: #eef2fa;
+  border: 2px dashed #132454;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10pt; color: #132454; font-weight: bold;
+  flex-shrink: 0;
+}
+/* La fecha va después del logo con margen automático,
+   pero no pasa de x≈530 para quedar en el área blanca
+   (el arco navy empieza en x≈561 a la altura del header) */
+.fecha {
+  font-size: 13pt;
+  color: #333;
+  margin-left: auto;
+  margin-right: 290px;
+}
+
+.titulo {
+  font-size: 25pt;
+  font-weight: bold;
+  color: #132454;
+  margin-bottom: 14px;
+}
+.empresa {
+  text-align: center;
+  font-size: 10pt;
+  line-height: 1.65;
+  color: #333;
+  margin-bottom: 20px;
+}
+.empresa strong { font-size: 10.5pt; color: #111; display: block; }
+
+.paciente {
+  font-size: 11pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #111;
+  margin-bottom: 10px;
+}
+
+table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+thead tr { background: #132454; }
+th {
+  color: #fff;
+  font-size: 11pt;
+  font-weight: bold;
+  padding: 12px 20px;
+  text-align: left;
+}
+th:last-child { text-align: center; width: 180px; }
+tbody tr:nth-child(odd)  { background: #ffffff; }
+tbody tr:nth-child(even) { background: #FDF5E6; }
+td { padding: 9px 20px; font-size: 10.5pt; color: #222; border: none; }
+td:last-child { text-align: center; }
+
+.totales { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+.totales-caja { min-width: 270px; }
+.subtotal-fila {
+  display: flex; justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 11pt; font-weight: bold; color: #111;
+}
+.total-fila {
+  display: flex; justify-content: space-between;
+  padding: 10px 14px; margin-top: 4px;
+  font-size: 13pt; font-weight: bold;
+  background: #F0A020; color: #fff; border-radius: 4px;
+}
+
+.footer {
+  display: flex; gap: 40px;
+  border-top: 1px solid #ddd;
+  padding-top: 12px;
+  font-size: 8.5pt; color: #555; line-height: 1.55;
+}
+.footer .f-izq { white-space: nowrap; }
+.footer .f-der { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="pag1">
+  <div class="tr-gray"></div>
+  <div class="tr-navy"></div>
+  <div class="tr-gold"></div>
+  <div class="bl-navy"></div>
+  <div class="bl-gold"></div>
+  <div class="br-navy"></div>
+
+  <div class="contenido">
+
+    <div class="header">
+      <div class="logo-placeholder">OPLAB Logo</div>
+      <div class="fecha">06 de Abril del 2026</div>
+    </div>
+
+    <div class="titulo">Cotización de Estudios</div>
+
+    <div class="empresa">
+      <strong>OPLAB Operadora de Laboratorios</strong>
+      Av Costera Miguel Aleman 2112-E-Local 16, La Condesa, CP 39690<br>
+      Acapulco de Juarez, Guerrero<br>
+      Tel: 7444403876 y 7445336188
+    </div>
+
+    <div class="paciente">Jose Eduardo De La O Galeana</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Estudio</th>
+          <th>Dias de proceso</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Biometria Hematica Completa</td><td>2-8 horas</td></tr>
+        <tr><td>Química Sanguínea De 6 Elementos Con Perfil De Lípidos</td><td>2-8 horas</td></tr>
+        <tr><td>Pcr Ultra Sensible</td><td>2-8 horas</td></tr>
+        <tr><td>Examen General De Orina</td><td>2-8 horas</td></tr>
+        <tr><td>Perfil Hepático</td><td>2-8 horas</td></tr>
+        <tr><td>Reacciones Febriles</td><td>2-8 horas</td></tr>
+        <tr><td>Hemoglobina Glucosilada</td><td>2-8 horas</td></tr>
+      </tbody>
+    </table>
+
+    <div class="totales">
+      <div class="totales-caja">
+        <div class="subtotal-fila">
+          <span>SUBTOTAL:</span><span>$2500.00</span>
+        </div>
+        <div class="total-fila">
+          <span>TOTAL:</span><span>$2500.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="f-izq">La cotización es válida por 7 días.</div>
+      <div class="f-der">El monto total corresponde a pago en efectivo. En caso de requerir
+      factura, se aplicará el porcentaje correspondiente de impuestos. Es importante
+      solicitarla previamente para realizar el ajuste en la cotización.</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

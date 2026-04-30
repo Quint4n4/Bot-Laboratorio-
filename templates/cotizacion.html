@@ -1,311 +1,399 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Cotización OPLAB</title>
-    <style>
-        * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<title>Cotización OPLAB</title>
+<style>
+* {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  box-sizing: border-box;
+  margin: 0; padding: 0;
+}
+@page { size: Letter; margin: 0; }
+body { font-family: Arial, Helvetica, sans-serif; background: #fff; }
 
-        body {
-            font-family: Arial, sans-serif;
-            color: #1a1a1a;
-            margin: 0;
-            padding: 0;
-            line-height: 1.5;
-            font-size: 11pt;
-        }
+/* ══════════════════════════════════════════
+   PÁGINA 1 — Wrapper
+══════════════════════════════════════════ */
+.pag1 {
+  width: 816px;
+  min-height: 1056px;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  page-break-after: always;
+}
 
-        /* ── PÁGINA 1: Cotización ─────────────────────────────── */
-        .page1 {
-            page-break-after: always;
-        }
+/* ── Formas decorativas ───────────────────
+   Técnica: círculos grandes centrados fuera
+   de la página → solo su arco es visible.
+─────────────────────────────────────────── */
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 22px;
-        }
+/* TOP-RIGHT: gris (capa trasera) — centro (819,-202) r=403 */
+.tr-gray {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #8d98a8;
+  top: -605px; right: -406px;
+  z-index: 1;
+}
 
-        .header-logo img {
-            max-height: 75px;
-            max-width: 220px;
-            object-fit: contain;
-            display: block;
-        }
+/* TOP-RIGHT: navy (capa frontal) — centro (849,-202) r=403 */
+.tr-navy {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #132454;
+  top: -605px; right: -436px;
+  z-index: 2;
+}
 
-        .header-date {
-            font-size: 13pt;
-            color: #444;
-            text-align: right;
-        }
+/* TOP-RIGHT: franja dorada */
+.tr-gold {
+  position: absolute;
+  width: 250px; height: 52px;
+  border-radius: 26px;
+  background: #F0A020;
+  top: 118px; right: -24px;
+  transform: rotate(15deg);
+  z-index: 3;
+}
 
-        .title {
-            color: #132454;
-            font-size: 22pt;
-            font-weight: bold;
-            margin: 0 0 18px 0;
-        }
+/* BOTTOM-LEFT: navy — espejo de tr-navy */
+.bl-navy {
+  position: absolute;
+  width: 806px; height: 806px;
+  border-radius: 50%;
+  background: #132454;
+  bottom: -605px; left: -436px;
+  z-index: 1;
+}
 
-        .info-center {
-            text-align: center;
-            font-size: 11pt;
-            margin-bottom: 30px;
-            color: #333;
-        }
+/* BOTTOM-LEFT: franja dorada */
+.bl-gold {
+  position: absolute;
+  width: 250px; height: 52px;
+  border-radius: 26px;
+  background: #F0A020;
+  bottom: 118px; left: -24px;
+  transform: rotate(-165deg);
+  z-index: 2;
+}
 
-        .info-center strong {
-            color: #132454;
-            display: block;
-            margin-bottom: 4px;
-            font-size: 12pt;
-        }
+/* BOTTOM-RIGHT: pieza navy pequeña */
+.br-navy {
+  position: absolute;
+  width: 210px; height: 88px;
+  border-radius: 44px;
+  background: #132454;
+  bottom: 12px; right: -28px;
+  transform: rotate(-11deg);
+  z-index: 1;
+}
 
-        .patient-info {
-            margin-bottom: 20px;
-            font-size: 12pt;
-        }
+/* ── Contenido ──────────────────────────── */
+.contenido {
+  position: relative;
+  z-index: 10;
+  padding: 46px 62px 38px 56px;
+}
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 28px;
-        }
+/* Header: logo + fecha */
+.header {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+.logo img { max-height: 80px; max-width: 200px; display: block; flex-shrink: 0; }
+/* La fecha usa margin-left:auto pero se detiene antes del arco navy
+   (el arco empieza en x≈561 a la altura del header) */
+.fecha {
+  font-size: 13pt;
+  color: #333;
+  margin-left: auto;
+  margin-right: 290px;
+}
 
-        th {
-            background-color: #132454;
-            color: white;
-            text-align: left;
-            padding: 10px 12px;
-            font-size: 11pt;
-        }
+/* Título */
+.titulo {
+  font-size: 25pt;
+  font-weight: bold;
+  color: #132454;
+  margin-bottom: 14px;
+}
 
-        td {
-            padding: 9px 12px;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 11pt;
-            vertical-align: top;
-        }
+/* Info empresa */
+.empresa {
+  text-align: center;
+  font-size: 10pt;
+  line-height: 1.65;
+  color: #333;
+  margin-bottom: 20px;
+}
+.empresa strong { font-size: 10.5pt; color: #111; display: block; }
 
-        .study-name {
-            font-weight: bold;
-            display: block;
-        }
+/* Nombre del paciente */
+.paciente {
+  font-size: 11pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #111;
+  margin-bottom: 10px;
+}
 
-        .study-sample {
-            font-size: 8.5pt;
-            color: #666;
-            display: block;
-            margin-top: 2px;
-        }
+/* Tabla de estudios */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+thead tr { background: #132454; }
+th {
+  color: #fff;
+  font-size: 11pt;
+  font-weight: bold;
+  padding: 12px 20px;
+  text-align: left;
+}
+th:last-child { text-align: center; width: 180px; }
 
-        .total-row td {
-            font-weight: bold;
-            font-size: 12pt;
-            border-bottom: none;
-            border-top: 2px solid #132454;
-            padding-top: 12px;
-        }
+tbody tr:nth-child(odd)  { background: #ffffff; }
+tbody tr:nth-child(even) { background: #FDF5E6; }
 
-        .text-right { text-align: right; }
+td { padding: 9px 20px; font-size: 10.5pt; color: #222; border: none; }
+td:last-child { text-align: center; }
 
-        .footer-bar {
-            display: flex;
-            justify-content: space-between;
-            border-top: 1px solid #ccc;
-            padding-top: 14px;
-            margin-top: 20px;
-            font-size: 9.5pt;
-            color: #444;
-        }
+/* Totales */
+.totales {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 28px;
+}
+.totales-caja { min-width: 270px; }
 
-        .footer-bar .left { width: 40%; }
-        .footer-bar .right { width: 56%; text-align: right; }
+.subtotal-fila {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 11pt;
+  font-weight: bold;
+  color: #111;
+}
+.total-fila {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin-top: 4px;
+  font-size: 13pt;
+  font-weight: bold;
+  background: #F0A020;
+  color: #fff;
+  border-radius: 4px;
+}
 
-        /* ── PÁGINA 2: Recomendaciones ────────────────────────── */
-        .page2 {}
+/* Footer */
+.footer {
+  display: flex;
+  gap: 40px;
+  border-top: 1px solid #ddd;
+  padding-top: 12px;
+  font-size: 8.5pt;
+  color: #555;
+  line-height: 1.55;
+}
+.footer .f-izq { white-space: nowrap; }
+.footer .f-der { flex: 1; }
 
-        .page2-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #132454;
-        }
 
-        .page2-header img {
-            max-height: 60px;
-            max-width: 180px;
-            object-fit: contain;
-        }
+/* ══════════════════════════════════════════
+   PÁGINA 2 — Instrucciones de preparación
+══════════════════════════════════════════ */
+.pag2 {
+  width: 816px;
+  min-height: 1056px;
+  background: #fff;
+  padding: 46px 62px 38px 56px;
+}
 
-        .page2-title {
-            color: #132454;
-            font-size: 17pt;
-            font-weight: bold;
-            margin: 0 0 22px 0;
-        }
+.pag2-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid #132454;
+  padding-bottom: 12px;
+  margin-bottom: 22px;
+}
+.pag2-header img  { max-height: 60px; max-width: 160px; }
+.pag2-header .tel { font-size: 9.5pt; color: #555; text-align: right; }
 
-        .rec-patient {
-            font-size: 11pt;
-            margin-bottom: 22px;
-            color: #333;
-        }
+.pag2-titulo {
+  font-size: 18pt;
+  font-weight: bold;
+  color: #132454;
+  margin-bottom: 12px;
+}
+.pag2-intro {
+  font-size: 10.5pt;
+  color: #333;
+  line-height: 1.6;
+  margin-bottom: 22px;
+}
 
-        .rec-card {
-            border-left: 4px solid #132454;
-            background: #f7f9fc;
-            border-radius: 0 6px 6px 0;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-            page-break-inside: avoid;
-        }
+.rec-card {
+  border-left: 4px solid #132454;
+  background: #f7f9fc;
+  border-radius: 0 6px 6px 0;
+  padding: 11px 16px;
+  margin-bottom: 14px;
+  page-break-inside: avoid;
+}
+.rec-titulo { font-weight: bold; color: #132454; font-size: 11pt; margin-bottom: 5px; }
+.rec-body   { font-size: 9.5pt; color: #333; line-height: 1.6; }
+.rec-body ul { margin: 4px 0 0 0; padding-left: 16px; }
+.rec-body li { margin-bottom: 2px; }
 
-        .rec-card-title {
-            font-weight: bold;
-            color: #132454;
-            font-size: 11.5pt;
-            margin-bottom: 6px;
-        }
-
-        .rec-card-body {
-            font-size: 10pt;
-            color: #333;
-            line-height: 1.6;
-        }
-
-        .rec-card-body ul {
-            margin: 4px 0 0 0;
-            padding-left: 18px;
-        }
-
-        .rec-card-body li {
-            margin-bottom: 3px;
-        }
-
-        .page2-footer {
-            margin-top: 30px;
-            font-size: 8.5pt;
-            color: #888;
-            border-top: 1px solid #ccc;
-            padding-top: 10px;
-            text-align: center;
-        }
-    </style>
+.pag2-footer {
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid #ccc;
+  font-size: 8pt;
+  color: #888;
+  text-align: center;
+}
+</style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════
-     PÁGINA 1: Cotización de Estudios
-══════════════════════════════════════════ -->
-<div class="page1">
+<!-- ════════════════════════════════════════
+     PÁGINA 1 — Cotización
+════════════════════════════════════════ -->
+<div class="pag1">
 
+  <!-- Formas decorativas de esquinas -->
+  <div class="tr-gray"></div>
+  <div class="tr-navy"></div>
+  <div class="tr-gold"></div>
+  <div class="bl-navy"></div>
+  <div class="bl-gold"></div>
+  <div class="br-navy"></div>
+
+  <div class="contenido">
+
+    <!-- Header -->
     <div class="header">
-        <div class="header-logo">
-            {% if logo_data %}
-            <img src="{{ logo_data }}" alt="OPLAB Logo" />
-            {% endif %}
-        </div>
-        <div class="header-date">{{ fecha }}</div>
+      <div class="logo">
+        {% if logo_data %}
+        <img src="{{ logo_data }}" alt="OPLAB" />
+        {% endif %}
+      </div>
+      <div class="fecha">{{ fecha }}</div>
     </div>
 
-    <div class="title">Cotización de Estudios</div>
+    <!-- Título -->
+    <div class="titulo">Cotización de Estudios</div>
 
-    <div class="info-center">
-        <strong>OPLAB Operadora de Laboratorios</strong>
-        Av Costera Miguel Aleman 2112-E-Local 16, La Condesa, CP 39690<br>
-        Acapulco de Juarez, Guerrero<br>
-        Tel: 7444403876 y 7445336188
+    <!-- Datos de la empresa -->
+    <div class="empresa">
+      <strong>OPLAB Operadora de Laboratorios</strong>
+      Av Costera Miguel Aleman 2112-E-Local 16, La Condesa, CP 39690<br>
+      Acapulco de Juarez, Guerrero<br>
+      Tel: 7444403876 y 7445336188
     </div>
 
-    <div class="patient-info">
-        <strong>Paciente:</strong> {{ paciente_nombre }}
-    </div>
+    <!-- Nombre del paciente -->
+    <div class="paciente">{{ paciente_nombre }}</div>
 
+    <!-- Tabla -->
     <table>
-        <thead>
-            <tr>
-                <th>Estudio / Análisis</th>
-                <th class="text-right" style="width:130px;">Precio</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>
-                    <span class="study-name">{{ item.nombre }}</span>
-                    {% if item.recomendacion %}
-                    <span class="study-sample">Muestra: {{ item.recomendacion }}</span>
-                    {% endif %}
-                </td>
-                <td class="text-right">${{ item.precio }}</td>
-            </tr>
-            {% endfor %}
-            <tr class="total-row">
-                <td class="text-right">Total a Pagar:</td>
-                <td class="text-right">${{ total }}</td>
-            </tr>
-        </tbody>
+      <thead>
+        <tr>
+          <th>Estudio</th>
+          <th>Dias de proceso</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.nombre | title }}</td>
+          <td>{{ item.tiempo if item.tiempo else '2-8 horas' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
 
-    <div class="footer-bar">
-        <div class="left">La cotización es válida por 7 días.</div>
-        <div class="right">El monto total corresponde a pago en efectivo. En caso de requerir
-        factura, se aplicará el porcentaje correspondiente de impuestos. Es importante
-        solicitarla previamente para realizar el ajuste en la cotización.</div>
+    <!-- Totales -->
+    <div class="totales">
+      <div class="totales-caja">
+        <div class="subtotal-fila">
+          <span>SUBTOTAL:</span>
+          <span>${{ total }}</span>
+        </div>
+        <div class="total-fila">
+          <span>TOTAL:</span>
+          <span>${{ total }}</span>
+        </div>
+      </div>
     </div>
 
+    <!-- Footer legal -->
+    <div class="footer">
+      <div class="f-izq">La cotización es válida por 7 días.</div>
+      <div class="f-der">El monto total corresponde a pago en efectivo. En caso de requerir
+      factura, se aplicará el porcentaje correspondiente de impuestos. Es importante
+      solicitarla previamente para realizar el ajuste en la cotización.</div>
+    </div>
+
+  </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     PÁGINA 2: Recomendaciones de Preparación
-══════════════════════════════════════════ -->
-<div class="page2">
 
-    <div class="page2-header">
-        <div>
-            {% if logo_data %}
-            <img src="{{ logo_data }}" alt="OPLAB Logo" />
-            {% endif %}
-        </div>
-        <div style="text-align:right; font-size:10pt; color:#555;">
-            Área de Atención al Paciente<br>
-            Tel: 7444403876 y 7445336188
-        </div>
+<!-- ════════════════════════════════════════
+     PÁGINA 2 — Instrucciones de preparación
+════════════════════════════════════════ -->
+<div class="pag2">
+
+  <div class="pag2-header">
+    <div>
+      {% if logo_data %}
+      <img src="{{ logo_data }}" alt="OPLAB" />
+      {% endif %}
     </div>
-
-    <div class="page2-title">Instrucciones de Preparación</div>
-
-    <div class="rec-patient">
-        Estimado(a) <strong>{{ paciente_nombre }}</strong>, a continuación encontrará las
-        indicaciones importantes para la correcta toma de sus muestras.
-        Por favor léalas con atención antes de acudir al laboratorio.
+    <div class="tel">
+      Área de Atención al Paciente<br>
+      Tel: 7444403876 y 7445336188
     </div>
+  </div>
 
-    {% for item in items %}
-    {% if item.preparacion %}
-    <div class="rec-card">
-        <div class="rec-card-title">{{ item.nombre }}</div>
-        <div class="rec-card-body">
-            <ul>
-                {% for linea in item.preparacion %}
-                <li>{{ linea }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-    {% endif %}
-    {% endfor %}
+  <div class="pag2-titulo">Instrucciones de Preparación</div>
 
-    <div class="page2-footer">
-        Esta información es orientativa y de carácter general. Ante cualquier duda,
-        comuníquese con nuestro personal de salud. &nbsp;|&nbsp; OPLAB Operadora de Laboratorios &nbsp;|&nbsp; {{ fecha }}
+  <div class="pag2-intro">
+    Estimado(a) <strong>{{ paciente_nombre }}</strong>, a continuación encontrará las
+    indicaciones importantes para la correcta toma de sus muestras.
+    Por favor léalas con atención antes de acudir al laboratorio.
+  </div>
+
+  {% for item in items %}
+  {% if item.preparacion %}
+  <div class="rec-card">
+    <div class="rec-titulo">{{ item.nombre | title }}</div>
+    <div class="rec-body">
+      <ul>
+        {% for linea in item.preparacion %}
+        <li>{{ linea }}</li>
+        {% endfor %}
+      </ul>
     </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="pag2-footer">
+    Esta información es orientativa y de carácter general. Ante cualquier duda, comuníquese
+    con nuestro personal de salud.&nbsp;|&nbsp;OPLAB Operadora de Laboratorios&nbsp;|&nbsp;{{ fecha }}
+  </div>
 
 </div>
 
