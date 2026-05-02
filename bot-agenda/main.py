@@ -44,14 +44,48 @@ def get_or_create_user(telegram_id: str, full_name: str, db) -> User:
     return user
 
 
-async def send_text_and_voice(update: Update, user: User, text: str, parse_mode: str = "Markdown"):
-    """Envía un mensaje de texto y, si el usuario lo prefiere, también un audio."""
-    await update.effective_message.reply_text(text, parse_mode=parse_mode)
-    if user.voice_replies:
-        audio_path = await text_to_speech(text.replace("*", "").replace("_", ""), voice=user.voice_persona or "nova")
-        with open(audio_path, "rb") as f:
-            await update.effective_message.reply_voice(voice=f)
-        os.unlink(audio_path)
+def _cache_text_for_button(context: ContextTypes.DEFAULT_TYPE, text: str) -> str:
+    """
+    Guarda el texto en bot_data con un id corto y devuelve el id.
+    Mantiene solo los últimos 200 textos para no crecer en memoria.
+    """
+    import secrets
+    short_id = secrets.token_urlsafe(6)
+    cache = context.bot_data.setdefault("text_cache", {})
+    cache[short_id] = text
+    if len(cache) > 200:
+        # Quitar el más viejo (dicts mantienen orden de inserción en Py 3.7+)
+        oldest = next(iter(cache))
+        cache.pop(oldest, None)
+    return short_id
+
+
+async def send_text_and_voice(update: Update, user: User, text: str, parse_mode: str = "Markdown",
+                              context: ContextTypes.DEFAULT_TYPE = None):
+    """
+    Manda la respuesta como audio (voz consistente de ElevenLabs) con un botón
+    'Ver texto' para revelar la transcripción. Si voice_replies=False, manda solo texto.
+    """
+    if not user.voice_replies:
+        await update.effective_message.reply_text(text, parse_mode=parse_mode)
+        return
+
+    audio_path = await text_to_speech(
+        text.replace("*", "").replace("_", ""),
+        voice=user.voice_persona or "aria",
+    )
+
+    # Botón inline para revelar el texto on-demand
+    reply_markup = None
+    if context is not None:
+        short_id = _cache_text_for_button(context, text)
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📝 Ver texto", callback_data=f"txt:{short_id}")
+        ]])
+
+    with open(audio_path, "rb") as f:
+        await update.effective_message.reply_voice(voice=f, reply_markup=reply_markup)
+    os.unlink(audio_path)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +110,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Por ejemplo: _'Recuérdame en 10 minutos tomar agua'_ o _'¿Qué tengo para mañana?'_\n\n"
         "Usa /ayuda para ver todos los comandos disponibles."
     )
-    await send_text_and_voice(update, user, welcome)
+    await send_text_and_voice(update, user, welcome, context=context)
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +157,7 @@ async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.close()
 
     if not events:
-        await send_text_and_voice(update, user, "📭 No tienes eventos pendientes para hoy. ¡Día libre! 🎉")
+        await send_text_and_voice(update, user, "📭 No tienes eventos pendientes para hoy. ¡Día libre! 🎉", context=context)
         return
 
     lines = ["📅 *Tu agenda de hoy:*\n"]
@@ -132,7 +166,7 @@ async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
         lines.append(f"{icon} `{hora}` — {ev.title}  _(ID: {ev.id})_")
 
-    await send_text_and_voice(update, user, "\n".join(lines))
+    await send_text_and_voice(update, user, "\n".join(lines), context=context)
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +287,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     response = process_message(user_text, user_id, db, timezone=user.timezone or "America/Mexico_City")
 
-    await send_text_and_voice(update, user, response)
+    await send_text_and_voice(update, user, response, context=context)
     db.close()
 
 
@@ -286,7 +320,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Procesar con IA
         response = process_message(transcribed, user_id, db, timezone=user.timezone or "America/Mexico_City")
 
-        await send_text_and_voice(update, user, response)
+        await send_text_and_voice(update, user, response, context=context)
         db.close()
 
     except Exception as e:
@@ -316,6 +350,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     try:
+        # --- Ver texto del audio ---
+        if data.startswith("txt:"):
+            short_id = data.split(":", 1)[1]
+            text = context.bot_data.get("text_cache", {}).get(short_id)
+            if text:
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(text, parse_mode="Markdown")
+            else:
+                await query.message.reply_text("⚠️ No pude recuperar el texto (el bot se reinició desde que recibiste este audio).")
+            return
+
         # --- Completar evento ---
         if data.startswith("complete:"):
             event_id = int(data.split(":")[1])
@@ -421,7 +466,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     async def on_startup(application):
-        start_scheduler(application.bot)
+        start_scheduler(application)
         logger.info("🚀 ARIA Bot iniciado. Esperando mensajes...")
 
     app.post_init = on_startup

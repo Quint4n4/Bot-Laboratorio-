@@ -39,8 +39,11 @@ ELEVENLABS_VOICES = {
 # Voz por defecto
 DEFAULT_ELEVEN_VOICE = "aria"
 
-# Modelo multilingüe v2 (el mejor para español)
-ELEVEN_MODEL = "eleven_multilingual_v2"
+# Modelo Turbo v2.5: soporta language_code para forzar español sin importar
+# la longitud del texto. Esto evita el bug del v2 multilingüe que cambiaba
+# a inglés en frases cortas (<25 chars).
+ELEVEN_MODEL = "eleven_turbo_v2_5"
+ELEVEN_LANGUAGE = "es"
 
 
 # ---------------------------------------------------------------------------
@@ -103,9 +106,9 @@ async def transcribe_voice(file_path: str) -> str:
 # ---------------------------------------------------------------------------
 async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
     """
-    Convierte texto a audio MP3 usando ElevenLabs (calidad de actor de doblaje).
-    Usa asyncio.run_in_executor para no bloquear el event loop.
-    Fallback a OpenAI TTS si ElevenLabs falla.
+    Convierte texto a audio MP3 usando ElevenLabs Turbo v2.5 con español forzado.
+    Garantiza voz consistente (Aria u otra elegida) sin importar la longitud
+    del texto. Solo se cae a OpenAI TTS si ElevenLabs API está completamente caído.
     """
     cleaned = _clean_for_tts(text)
     voice_id = get_eleven_voice_id(voice)
@@ -116,10 +119,11 @@ async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
             output_format="mp3_44100_128",
             text=cleaned,
             model_id=ELEVEN_MODEL,
+            language_code=ELEVEN_LANGUAGE,   # Fuerza español incluso en texto corto
             voice_settings=VoiceSettings(
-                stability=0.45,
-                similarity_boost=0.80,
-                style=0.35,
+                stability=0.50,
+                similarity_boost=0.85,
+                style=0.30,
                 use_speaker_boost=True,
             ),
         )
@@ -130,20 +134,15 @@ async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
         return tmp.name
 
     try:
-        # ElevenLabs v2 tiene un bug donde frases menores a 15 caracteres las dice en inglés.
-        # Fallback a OpenAI (más rápido y estable) para mensajes super cortos.
-        if len(cleaned) < 25:
-            raise Exception("Mensaje demasiado corto para detectar español nativo, delegando a fallback")
-
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _call_elevenlabs)
     except Exception as e:
-        print(f"[TTS] Usando OpenAI TTS. Motivo: {e}")
-        # Fallback a OpenAI TTS
+        print(f"[TTS] ElevenLabs falló, fallback a OpenAI. Motivo: {e}")
+        # Fallback solo si ElevenLabs está completamente abajo. Idealmente nunca pasa.
         response = _openai_client.audio.speech.create(
             model="tts-1-hd",
-            voice="nova" if voice_id in ["9BWtsMINqrJLrRacOk9x", "FGY2WhTYpPnrIDTdsKH5", "EXAVITQu4vr4xnSDxMaL"] else "alloy",
+            voice="nova",
             input=cleaned,
             speed=0.95,
         )

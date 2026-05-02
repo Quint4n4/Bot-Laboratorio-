@@ -18,12 +18,30 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-# Se inyecta globalmente la instancia del bot de Telegram
-_bot_instance = None
+# Se inyecta globalmente la Application de python-telegram-bot
+# (necesitamos acceso a app.bot_data para compartir el text_cache con main.py)
+_app = None
 
-def set_bot(bot):
-    global _bot_instance
-    _bot_instance = bot
+def set_app(application):
+    global _app
+    _app = application
+
+
+def _cache_text_btn(text: str):
+    """
+    Cachea texto en app.bot_data['text_cache'] y devuelve un InlineKeyboardMarkup
+    con botón 'Ver texto'. Comparte cache con main.py.
+    """
+    import secrets
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    short_id = secrets.token_urlsafe(6)
+    cache = _app.bot_data.setdefault("text_cache", {})
+    cache[short_id] = text
+    if len(cache) > 200:
+        cache.pop(next(iter(cache)), None)
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("📝 Ver texto", callback_data=f"txt:{short_id}")
+    ]])
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +59,7 @@ FOLLOWUP_MESSAGES = [
 
 async def check_due_reminders():
     """Revisa la BD y envía recordatorios cuya hora ya llegó (UTC)."""
-    if not _bot_instance:
+    if not _app:
         return
 
     db: Session = SessionLocal()
@@ -72,7 +90,7 @@ async def check_due_reminders():
                 InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
             ]])
 
-            await _bot_instance.send_message(
+            await _app.bot.send_message(
                 chat_id=event.user_telegram_id,
                 text=text,
                 parse_mode="Markdown",
@@ -81,12 +99,17 @@ async def check_due_reminders():
 
             if user.voice_replies:
                 from voice_handler import text_to_speech
+                speech_text = f"Recordatorio: {event.title}."
                 audio_path = await text_to_speech(
-                    f"Recordatorio: {event.title}.",
-                    voice=user.voice_persona or "nova",
+                    speech_text,
+                    voice=user.voice_persona or "aria",
                 )
                 with open(audio_path, "rb") as f:
-                    await _bot_instance.send_voice(chat_id=event.user_telegram_id, voice=f)
+                    await _app.bot.send_voice(
+                        chat_id=event.user_telegram_id,
+                        voice=f,
+                        reply_markup=_cache_text_btn(speech_text),
+                    )
                 os.unlink(audio_path)
 
             event.reminder_sent    = True
@@ -123,7 +146,7 @@ async def check_due_reminders():
                 InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
             ]])
 
-            await _bot_instance.send_message(
+            await _app.bot.send_message(
                 chat_id=event.user_telegram_id,
                 text=msg,
                 parse_mode="Markdown",
@@ -146,7 +169,7 @@ async def check_due_reminders():
 # ---------------------------------------------------------------------------
 async def morning_briefing():
     """Envía el resumen matutino con PDF a todos los usuarios activos."""
-    if not _bot_instance:
+    if not _app:
         return
 
     db: Session = SessionLocal()
@@ -179,10 +202,10 @@ async def morning_briefing():
             pdf_path = generate_daily_briefing(events_list, user.full_name or "Tú", now)
 
             msg = f"☀️ *¡Buenos días!* Tienes *{len(events)}* evento(s) para hoy. Te adjunto tu agenda del día. 📄"
-            await _bot_instance.send_message(chat_id=user.telegram_id, text=msg, parse_mode="Markdown")
+            await _app.bot.send_message(chat_id=user.telegram_id, text=msg, parse_mode="Markdown")
 
             with open(pdf_path, "rb") as f:
-                await _bot_instance.send_document(
+                await _app.bot.send_document(
                     chat_id=user.telegram_id,
                     document=f,
                     filename=f"agenda_{now.strftime('%Y%m%d')}.pdf",
@@ -197,9 +220,13 @@ async def morning_briefing():
                     speech = f"Buenos días. Tienes {len(events)} evento{'s' if len(events) > 1 else ''} para hoy. El primero es {events[0].title}. Te envié la agenda completa en el documento adjunto."
                 else:
                     speech = "Buenos días. No tienes eventos programados para hoy. ¡Buen día libre!"
-                audio_path = await text_to_speech(speech, voice=user.voice_persona or "nova")
+                audio_path = await text_to_speech(speech, voice=user.voice_persona or "aria")
                 with open(audio_path, "rb") as f:
-                    await _bot_instance.send_voice(chat_id=user.telegram_id, voice=f)
+                    await _app.bot.send_voice(
+                        chat_id=user.telegram_id,
+                        voice=f,
+                        reply_markup=_cache_text_btn(speech),
+                    )
                 os.unlink(audio_path)
 
     except Exception as e:
@@ -213,7 +240,7 @@ async def morning_briefing():
 # ---------------------------------------------------------------------------
 async def evening_wrapup():
     """Envía el resumen nocturno con PDF a todos los usuarios activos."""
-    if not _bot_instance:
+    if not _app:
         return
 
     db: Session = SessionLocal()
@@ -249,9 +276,9 @@ async def evening_wrapup():
                 f"⏳ Pendientes: *{len(pending)}*\n\n"
                 f"Te adjunto el reporte completo 📄"
             )
-            await _bot_instance.send_message(chat_id=user.telegram_id, text=msg, parse_mode="Markdown")
+            await _app.bot.send_message(chat_id=user.telegram_id, text=msg, parse_mode="Markdown")
             with open(pdf_path, "rb") as f:
-                await _bot_instance.send_document(
+                await _app.bot.send_document(
                     chat_id=user.telegram_id,
                     document=f,
                     filename=f"wrapup_{now.strftime('%Y%m%d')}.pdf",
@@ -262,9 +289,13 @@ async def evening_wrapup():
             if user.voice_replies:
                 from voice_handler import text_to_speech
                 speech = f"Resumen del día. Completaste {len(completed)} tarea{'s' if len(completed) != 1 else ''}. Quedaron {len(pending)} pendiente{'s' if len(pending) != 1 else ''}. ¡Que descanses!"
-                audio_path = await text_to_speech(speech, voice=user.voice_persona or "nova")
+                audio_path = await text_to_speech(speech, voice=user.voice_persona or "aria")
                 with open(audio_path, "rb") as f:
-                    await _bot_instance.send_voice(chat_id=user.telegram_id, voice=f)
+                    await _app.bot.send_voice(
+                        chat_id=user.telegram_id,
+                        voice=f,
+                        reply_markup=_cache_text_btn(speech),
+                    )
                 os.unlink(audio_path)
 
     except Exception as e:
@@ -276,8 +307,8 @@ async def evening_wrapup():
 # ---------------------------------------------------------------------------
 # INICIALIZACIÓN DEL SCHEDULER
 # ---------------------------------------------------------------------------
-def start_scheduler(bot):
-    set_bot(bot)
+def start_scheduler(application):
+    set_app(application)
     # Revisar recordatorios cada 30 segundos
     scheduler.add_job(check_due_reminders, "interval", seconds=30, id="check_reminders")
     # Revisar briefing cada hora (la función internamente verifica si es la hora correcta)
