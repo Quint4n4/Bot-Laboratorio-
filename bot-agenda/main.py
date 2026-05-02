@@ -166,6 +166,13 @@ async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hora = ev.start_datetime.strftime("%I:%M %p").lstrip("0")
         icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
         lines.append(f"{icon} `{hora}` — {ev.title}  _(ID: {ev.id})_")
+        meta = []
+        if ev.location:        meta.append(f"📍 {ev.location}")
+        if ev.attendees:       meta.append(f"👥 {ev.attendees}")
+        if ev.recurrence_rule: meta.append(f"🔁 {ev.recurrence_rule}")
+        if ev.tags:            meta.append(f"🏷️ {ev.tags}")
+        if meta:
+            lines.append("    " + "  •  ".join(meta))
 
     await send_text_and_voice(update, user, "\n".join(lines), context=context)
 
@@ -200,7 +207,13 @@ async def cmd_semana(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for ev in events:
         fecha = ev.start_datetime.strftime("%a %d/%m  %I:%M %p")
         icon  = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
-        lines.append(f"{icon} `{fecha}` — {ev.title}")
+        line  = f"{icon} `{fecha}` — {ev.title}"
+        bits = []
+        if ev.location:        bits.append(f"📍 {ev.location}")
+        if ev.recurrence_rule: bits.append(f"🔁 {ev.recurrence_rule}")
+        if bits:
+            line += "  _(" + ", ".join(bits) + ")_"
+        lines.append(line)
 
     await update.effective_message.reply_text("\n".join(lines), parse_mode="Markdown")
 

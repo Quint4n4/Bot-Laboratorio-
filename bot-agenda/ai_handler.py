@@ -55,13 +55,17 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title":          {"type": "string",  "description": "Título corto del evento en español"},
-                    "event_type":     {"type": "string",  "enum": ["reminder", "meeting", "task"]},
-                    "start_datetime": {"type": "string",  "description": "Hora local del usuario en ISO 8601 (sin timezone). Ejemplo: 2026-04-22T16:00:00"},
-                    "end_datetime":   {"type": "string",  "description": "Hora local fin, ISO 8601. Solo para meetings."},
-                    "all_day":        {"type": "boolean", "description": "True si el evento es de todo el día"},
-                    "description":    {"type": "string",  "description": "Detalle opcional"},
-                    "force":          {"type": "boolean", "description": "Si es True, crea el evento aunque haya conflicto"},
+                    "title":           {"type": "string",  "description": "Título corto del evento en español"},
+                    "event_type":      {"type": "string",  "enum": ["reminder", "meeting", "task"]},
+                    "start_datetime":  {"type": "string",  "description": "Hora local del usuario en ISO 8601 (sin timezone). Ejemplo: 2026-04-22T16:00:00"},
+                    "end_datetime":    {"type": "string",  "description": "Hora local fin, ISO 8601. Solo para meetings."},
+                    "all_day":         {"type": "boolean", "description": "True si el evento es de todo el día"},
+                    "description":     {"type": "string",  "description": "Detalle opcional"},
+                    "location":        {"type": "string",  "description": "Lugar fisico (direccion) o link de videollamada (Zoom, Meet, etc.)"},
+                    "recurrence_rule": {"type": "string",  "description": "Si el evento se repite. Formatos: 'daily', 'weekly:MO,WE,FR', 'weekly:MO', 'monthly:15', 'yearly'. Ejemplo: 'todos los lunes a las 9' = 'weekly:MO'"},
+                    "attendees":       {"type": "string",  "description": "Nombres o emails de otros participantes separados por coma. Ejemplo: 'Pedro, Maria'"},
+                    "tags":            {"type": "string",  "description": "Categorias separadas por coma. Ejemplo: 'trabajo,proyecto-alpha' o 'salud'"},
+                    "force":           {"type": "boolean", "description": "Si es True, crea el evento aunque haya conflicto"},
                 },
                 "required": ["title", "event_type", "start_datetime"],
             },
@@ -75,11 +79,15 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "event_id":        {"type": "integer", "description": "ID del evento a modificar"},
-                    "new_start":       {"type": "string",  "description": "Nueva fecha/hora inicio ISO 8601 en hora local"},
-                    "new_end":         {"type": "string",  "description": "Nueva fecha/hora fin ISO 8601 en hora local"},
-                    "new_title":       {"type": "string",  "description": "Nuevo título"},
-                    "new_description": {"type": "string",  "description": "Nuevo detalle"},
+                    "event_id":            {"type": "integer", "description": "ID del evento a modificar"},
+                    "new_start":           {"type": "string",  "description": "Nueva fecha/hora inicio ISO 8601 en hora local"},
+                    "new_end":             {"type": "string",  "description": "Nueva fecha/hora fin ISO 8601 en hora local"},
+                    "new_title":           {"type": "string",  "description": "Nuevo título"},
+                    "new_description":     {"type": "string",  "description": "Nuevo detalle"},
+                    "new_location":        {"type": "string",  "description": "Nuevo lugar o link"},
+                    "new_recurrence_rule": {"type": "string",  "description": "Nueva regla de recurrencia (o cadena vacia para quitar)"},
+                    "new_attendees":       {"type": "string",  "description": "Nueva lista de participantes (CSV)"},
+                    "new_tags":            {"type": "string",  "description": "Nuevos tags (CSV)"},
                 },
                 "required": ["event_id"],
             },
@@ -234,6 +242,10 @@ def _exec_create_event(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> d
             start_datetime=start_utc,
             end_datetime=_local_to_utc(args["end_datetime"], tz) if args.get("end_datetime") else None,
             all_day=args.get("all_day", False),
+            location=args.get("location"),
+            recurrence_rule=args.get("recurrence_rule"),
+            attendees=args.get("attendees"),
+            tags=args.get("tags"),
         )
         db.add(event)
         db.commit()
@@ -288,6 +300,14 @@ def _exec_update_event(args: dict, db: Session, tz: ZoneInfo) -> dict:
         event.title = args["new_title"]
     if args.get("new_description"):
         event.description = args["new_description"]
+    if "new_location" in args:
+        event.location = args["new_location"] or None
+    if "new_recurrence_rule" in args:
+        event.recurrence_rule = args["new_recurrence_rule"] or None
+    if "new_attendees" in args:
+        event.attendees = args["new_attendees"] or None
+    if "new_tags" in args:
+        event.tags = args["new_tags"] or None
     db.commit()
     return {"ok": True, "event_id": event.id}
 
@@ -342,6 +362,10 @@ def _exec_query_agenda(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> d
                 "start": _fmt_local(e.start_datetime, tz),
                 "end": _fmt_local(e.end_datetime, tz) if e.end_datetime else None,
                 "status": e.status,
+                "location": e.location,
+                "recurrence_rule": e.recurrence_rule,
+                "attendees": e.attendees,
+                "tags": e.tags,
             }
             for e in events
         ]

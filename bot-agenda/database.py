@@ -64,6 +64,13 @@ class Event(Base):
     start_datetime   = Column(DateTime, nullable=False)
     end_datetime     = Column(DateTime, nullable=True)    # Para citas/reuniones
     all_day          = Column(Boolean, default=False)     # Evento de todo el día
+
+    # Campos enriquecidos (v2)
+    location         = Column(String,  nullable=True)     # Dirección o link de Zoom/Meet
+    recurrence_rule  = Column(String,  nullable=True)     # "daily" | "weekly:MO,WE" | "monthly:15"
+    attendees        = Column(Text,    nullable=True)     # CSV de nombres / emails
+    tags             = Column(String,  nullable=True)     # CSV: "trabajo,salud,personal"
+
     reminder_sent    = Column(Boolean, default=False)
     last_reminded_at = Column(DateTime, nullable=True)   # Para follow-ups
     followup_count   = Column(Integer, default=0)        # Cuántas veces se ha insistido
@@ -82,9 +89,43 @@ class Message(Base):
     created_at       = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+def _migrate_event_columns():
+    """
+    Agrega columnas nuevas a events si la tabla ya existia.
+    SQLAlchemy.create_all NO modifica tablas existentes; solo crea las que faltan.
+    Este migrator es idempotente: usa ADD COLUMN IF NOT EXISTS (Postgres 9.6+).
+    """
+    if "sqlite" in DATABASE_URL:
+        # SQLite: usar PRAGMA + ALTER TABLE manual (no soporta IF NOT EXISTS)
+        with engine.begin() as conn:
+            from sqlalchemy import text
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(events)")).fetchall()}
+            for col_name, col_def in [
+                ("location",        "VARCHAR"),
+                ("recurrence_rule", "VARCHAR"),
+                ("attendees",       "TEXT"),
+                ("tags",            "VARCHAR"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE events ADD COLUMN {col_name} {col_def}"))
+        return
+
+    # Postgres
+    with engine.begin() as conn:
+        from sqlalchemy import text
+        for col_name, col_def in [
+            ("location",        "VARCHAR"),
+            ("recurrence_rule", "VARCHAR"),
+            ("attendees",       "TEXT"),
+            ("tags",            "VARCHAR"),
+        ]:
+            conn.execute(text(f"ALTER TABLE events ADD COLUMN IF NOT EXISTS {col_name} {col_def}"))
+
+
 def init_db():
-    """Crea todas las tablas si no existen."""
+    """Crea todas las tablas si no existen y migra columnas nuevas en events."""
     Base.metadata.create_all(bind=engine)
+    _migrate_event_columns()
     print("✅ Base de datos inicializada correctamente (agenda.db).")
 
 
