@@ -18,9 +18,14 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Clientes de API
+# Las API keys se strippean para defender contra saltos de línea o espacios
+# accidentales pegados en Railway/env vars (rompen los headers HTTP).
 # ---------------------------------------------------------------------------
-_openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-_eleven_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY", ""))
+def _clean_env(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip().strip('"').strip("'")
+
+_openai_client = OpenAI(api_key=_clean_env("OPENAI_API_KEY"))
+_eleven_client = ElevenLabs(api_key=_clean_env("ELEVENLABS_API_KEY"))
 
 # ---------------------------------------------------------------------------
 # Voces de ElevenLabs curadas para español (nombre → voice_id)
