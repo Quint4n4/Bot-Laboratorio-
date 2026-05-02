@@ -3,6 +3,7 @@ voice_handler.py - Entrada y salida de voz
 Agenda Bot - Asistente Personal
 Usa ElevenLabs para TTS con calidad de actor de doblaje en español.
 """
+import logging
 import os
 import re
 import tempfile
@@ -12,6 +13,8 @@ from openai import OpenAI
 # ElevenLabs
 from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Clientes de API
@@ -138,7 +141,12 @@ async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _call_elevenlabs)
     except Exception as e:
-        print(f"[TTS] ElevenLabs falló, fallback a OpenAI. Motivo: {e}")
+        # Log detallado para que veamos en Railway por qué falla ElevenLabs
+        logger.error(
+            f"[TTS] ElevenLabs falló (modelo={ELEVEN_MODEL}, voz={voice}, "
+            f"voice_id={voice_id}, len={len(cleaned)}). Cae a OpenAI TTS.",
+            exc_info=True,
+        )
         # Fallback solo si ElevenLabs está completamente abajo. Idealmente nunca pasa.
         response = _openai_client.audio.speech.create(
             model="tts-1-hd",
