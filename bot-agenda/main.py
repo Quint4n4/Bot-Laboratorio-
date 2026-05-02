@@ -242,17 +242,9 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_or_create_user(user_id, update.effective_user.first_name, db)
     db.close()
 
-    # Voces ElevenLabs disponibles (nombre → descripción)
-    voices = {
-        "aria":    "Aria — Expresiva y natural (recomendada) 🌟",
-        "sarah":   "Sarah — Suave y clara",
-        "laura":   "Laura — Joven y amigable",
-        "paula":   "Paula — Cálida y profesional",
-        "river":   "River — Masculino, neutral",
-        "charlie": "Charlie — Masculino, casual",
-        "liam":    "Liam — Masculino, joven",
-        "eric":    "Eric — Masculino, profesional",
-    }
+    # Voces de OpenAI TTS disponibles
+    from voice_handler import OPENAI_VOICES
+    voices = OPENAI_VOICES
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(
@@ -265,7 +257,7 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚙️ *Tu perfil:*\n\n"
         f"• Zona horaria: `{user.timezone}`\n"
-        f"• Voz actual: `{user.voice_persona}` (ElevenLabs)\n"
+        f"• Voz actual: `{user.voice_persona}` (OpenAI TTS-1-HD)\n"
         f"• Briefing matutino: `{user.morning_hour:02d}:00`\n"
         f"• Wrap-up nocturno: `{user.evening_hour:02d}:00`\n"
         f"• Respuestas de voz: `{'Activadas ✅' if user.voice_replies else 'Desactivadas ❌'}`\n\n"

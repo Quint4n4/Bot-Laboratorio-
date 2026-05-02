@@ -1,7 +1,7 @@
 """
 voice_handler.py - Entrada y salida de voz
 Agenda Bot - Asistente Personal
-Usa ElevenLabs para TTS con calidad de actor de doblaje en español.
+Usa OpenAI Whisper para STT y OpenAI TTS-1-HD para sintesis de voz consistente.
 """
 import logging
 import os
@@ -10,48 +10,36 @@ import tempfile
 
 from openai import OpenAI
 
-# ElevenLabs
-from elevenlabs.client import ElevenLabs
-from elevenlabs import VoiceSettings
-
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Clientes de API
-# Las API keys se strippean para defender contra saltos de línea o espacios
-# accidentales pegados en Railway/env vars (rompen los headers HTTP).
+# Cliente OpenAI
+# Strip defensivo de la API key para prevenir saltos de linea o comillas
+# accidentales pegados en variables de entorno (Railway/Heroku/etc).
 # ---------------------------------------------------------------------------
 def _clean_env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip('"').strip("'")
 
+
 _openai_client = OpenAI(api_key=_clean_env("OPENAI_API_KEY"))
-_eleven_client = ElevenLabs(api_key=_clean_env("ELEVENLABS_API_KEY"))
+
 
 # ---------------------------------------------------------------------------
-# Voces de ElevenLabs curadas para español (nombre → voice_id)
-# Puedes agregar más desde: https://elevenlabs.io/app/voice-library
+# Voces de OpenAI (todas funcionan en español)
 # ---------------------------------------------------------------------------
-ELEVENLABS_VOICES = {
-    # Voces femeninas
-    "aria":    "9BWtsMINqrJLrRacOk9x",   # Aria — Natural, expresiva (recomendada)
-    "sarah":   "EXAVITQu4vr4xnSDxMaL",   # Sarah — Suave y clara
-    "laura":   "FGY2WhTYpPnrIDTdsKH5",   # Laura — Joven y amigable
-    "paula":   "pFZP5JQG7iQjIQuC4Bku",   # Paula — Cálida y profesional
-    # Voces masculinas
-    "river":   "SAz9YHcvj6GT2YYXdXww",   # River — Neutral y claro
-    "charlie": "IKne3meq5aSn9XLyUdCD",   # Charlie — Casual
-    "liam":    "TX3LPaxmHKxFdv7VOQHJ",   # Liam — Joven y energético
-    "eric":    "cjVigY5qzO86Huf0OWal",   # Eric — Profesional
+OPENAI_VOICES = {
+    "nova":    "Nova — Femenina, clara (recomendada) 🌟",
+    "shimmer": "Shimmer — Femenina, suave",
+    "alloy":   "Alloy — Neutral",
+    "echo":    "Echo — Masculina, calma",
+    "fable":   "Fable — Masculina, expresiva",
+    "onyx":    "Onyx — Masculina, profunda",
 }
 
-# Voz por defecto
-DEFAULT_ELEVEN_VOICE = "aria"
-
-# Modelo Turbo v2.5: soporta language_code para forzar español sin importar
-# la longitud del texto. Esto evita el bug del v2 multilingüe que cambiaba
-# a inglés en frases cortas (<25 chars).
-ELEVEN_MODEL = "eleven_turbo_v2_5"
-ELEVEN_LANGUAGE = "es"
+DEFAULT_VOICE = "nova"
+TTS_MODEL = "tts-1-hd"   # Alta calidad
+TTS_SPEED = 0.95         # Ligeramente lento para sonar natural en español
 
 
 # ---------------------------------------------------------------------------
@@ -63,44 +51,39 @@ def _clean_for_tts(text: str) -> str:
     Limpia el texto para que suene natural:
     - Elimina formato Markdown (* _ ` #)
     - Elimina emojis
-    - Asegura que termine en puntuación para no cortar el audio
+    - Normaliza guiones largos a comas (pausa)
+    - Asegura que termine en puntuación
     """
-    # Quitar formato Markdown
     text = re.sub(r"[*_`#~]", "", text)
-    # Quitar comandos tipo /start
     text = re.sub(r"/\w+", "", text)
-    # Reemplazar guiones por coma (pausa natural)
     text = text.replace("—", ",").replace("--", ",")
-    # Eliminar emojis Unicode
-    text = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u26FF\u2700-\u27BF]", "", text)
-    # Limpiar espacios múltiples
+    text = re.sub(r"[\U0001F300-\U0001FAFF☀-⛿✀-➿]", "", text)
     text = re.sub(r" {2,}", " ", text).strip()
-    # Asegurar puntuación al final para evitar que el audio se corte
     if text and text[-1] not in ".!?,;:":
         text += "."
     return text
 
 
-def get_eleven_voice_id(voice_name: str) -> str:
-    """Retorna el voice_id de ElevenLabs dado un nombre de voz."""
-    return ELEVENLABS_VOICES.get(voice_name.lower(), ELEVENLABS_VOICES[DEFAULT_ELEVEN_VOICE])
+def _resolve_voice(voice: str) -> str:
+    """
+    Devuelve un voice válido de OpenAI. Si el usuario tiene un valor antiguo
+    (ej. 'aria' de cuando se usaba ElevenLabs) usa el default.
+    """
+    return voice if voice in OPENAI_VOICES else DEFAULT_VOICE
 
 
 # ---------------------------------------------------------------------------
-# STT: Transcripción de notas de voz con Whisper (OpenAI)
+# STT: Transcripción de notas de voz (Whisper)
 # ---------------------------------------------------------------------------
 async def transcribe_voice(file_path: str) -> str:
-    """
-    Transcribe un archivo de audio usando OpenAI Whisper.
-    Se ejecuta en un executor para no bloquear el event loop.
-    """
+    """Transcribe un archivo de audio a texto con Whisper."""
     def _transcribe():
         with open(file_path, "rb") as f:
             response = _openai_client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
                 language="es",
-                response_format="text"
+                response_format="text",
             )
         return response
 
@@ -110,57 +93,29 @@ async def transcribe_voice(file_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# TTS: Síntesis de voz con ElevenLabs
+# TTS: Síntesis de voz con OpenAI
 # ---------------------------------------------------------------------------
-async def text_to_speech(text: str, voice: str = DEFAULT_ELEVEN_VOICE) -> str:
+async def text_to_speech(text: str, voice: str = DEFAULT_VOICE) -> str:
     """
-    Convierte texto a audio MP3 usando ElevenLabs Turbo v2.5 con español forzado.
-    Garantiza voz consistente (Aria u otra elegida) sin importar la longitud
-    del texto. Solo se cae a OpenAI TTS si ElevenLabs API está completamente caído.
+    Convierte texto a audio MP3 con OpenAI TTS-1-HD.
+    Voz 100% consistente sin importar la longitud del texto (no hay fallback
+    a otros providers — siempre usa OpenAI).
     """
     cleaned = _clean_for_tts(text)
-    voice_id = get_eleven_voice_id(voice)
+    chosen_voice = _resolve_voice(voice)
 
-    def _call_elevenlabs():
-        audio_generator = _eleven_client.text_to_speech.convert(
-            voice_id=voice_id,
-            output_format="mp3_44100_128",
-            text=cleaned,
-            model_id=ELEVEN_MODEL,
-            language_code=ELEVEN_LANGUAGE,   # Fuerza español incluso en texto corto
-            voice_settings=VoiceSettings(
-                stability=0.50,
-                similarity_boost=0.85,
-                style=0.30,
-                use_speaker_boost=True,
-            ),
-        )
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        for chunk in audio_generator:
-            tmp.write(chunk)
-        tmp.close()
-        return tmp.name
-
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _call_elevenlabs)
-    except Exception as e:
-        # Log detallado para que veamos en Railway por qué falla ElevenLabs
-        logger.error(
-            f"[TTS] ElevenLabs falló (modelo={ELEVEN_MODEL}, voz={voice}, "
-            f"voice_id={voice_id}, len={len(cleaned)}). Cae a OpenAI TTS.",
-            exc_info=True,
-        )
-        # Fallback solo si ElevenLabs está completamente abajo. Idealmente nunca pasa.
+    def _call_openai():
         response = _openai_client.audio.speech.create(
-            model="tts-1-hd",
-            voice="nova",
+            model=TTS_MODEL,
+            voice=chosen_voice,
             input=cleaned,
-            speed=0.95,
+            speed=TTS_SPEED,
         )
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         tmp.write(response.content)
         tmp.close()
         return tmp.name
 
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _call_openai)

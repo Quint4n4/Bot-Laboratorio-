@@ -6,7 +6,6 @@ charset-normalizer==3.4.7
 colorama==0.4.6
 defusedxml==0.7.1
 distro==1.9.0
-elevenlabs==2.44.0
 fonttools==4.62.1
 fpdf2==2.8.7
 greenlet==3.4.0
