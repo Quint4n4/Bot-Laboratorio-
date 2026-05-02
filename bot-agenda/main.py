@@ -18,7 +18,7 @@ from telegram.ext import (
 )
 
 from database import init_db, SessionLocal, User, Event, EventStatus
-from ai_handler import process_message
+from ai_handler import process_message, reset_history
 from voice_handler import transcribe_voice, text_to_speech
 from scheduler import start_scheduler
 from pdf_generator import generate_productivity_report
@@ -123,7 +123,8 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /semana — Ver agenda de los próximos 7 días\n"
         "• /reporte — Reporte de productividad (diario/semanal/mensual)\n"
         "• /voz — Activar/desactivar respuestas en audio\n"
-        "• /perfil — Ver y cambiar tu configuración\n\n"
+        "• /perfil — Ver y cambiar tu configuración\n"
+        "• /olvidar — Borrar el historial conversacional\n\n"
         "💬 *O simplemente escríbeme lo que necesitas en lenguaje natural:*\n"
         "_'Agéndame una junta el martes a las 3 PM'_\n"
         "_'Cancela mi cita del viernes'_\n"
@@ -216,6 +217,21 @@ async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
         "📊 ¿Qué período quieres reportar?",
         reply_markup=keyboard,
+    )
+
+
+# ---------------------------------------------------------------------------
+# /olvidar — Borrar el historial conversacional del usuario
+# ---------------------------------------------------------------------------
+async def cmd_olvidar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        n = reset_history(user_id, db)
+    finally:
+        db.close()
+    await update.effective_message.reply_text(
+        f"🧠 Olvidé nuestra conversación previa ({n} mensaje{'s' if n != 1 else ''} borrado{'s' if n != 1 else ''}). Empezamos de cero."
     )
 
 
@@ -449,6 +465,7 @@ def main():
     app.add_handler(CommandHandler("reporte", cmd_reporte))
     app.add_handler(CommandHandler("voz",     cmd_voz))
     app.add_handler(CommandHandler("perfil",  cmd_perfil))
+    app.add_handler(CommandHandler("olvidar", cmd_olvidar))
 
     # Mensajes libres
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

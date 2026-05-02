@@ -71,6 +71,17 @@ class Event(Base):
     updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Message(Base):
+    """Historial conversacional por usuario para memoria multi-turno de ARIA."""
+    __tablename__ = "messages"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    user_telegram_id = Column(String, nullable=False, index=True)
+    role             = Column(String, nullable=False)   # 'user' | 'assistant'
+    content          = Column(Text,   nullable=False)
+    created_at       = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 def init_db():
     """Crea todas las tablas si no existen."""
     Base.metadata.create_all(bind=engine)

@@ -9,9 +9,19 @@ from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 from sqlalchemy.orm import Session
-from database import Event, User, EventType, EventStatus
+from database import Event, User, EventType, EventStatus, Message
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Strip defensivo por si la API key viene con \n o comillas accidentales
+_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "").strip().strip('"').strip("'")
+client = OpenAI(api_key=_OPENAI_KEY)
+
+
+# ---------------------------------------------------------------------------
+# Configuración de memoria conversacional
+# ---------------------------------------------------------------------------
+HISTORY_LIMIT = 20   # Máximo de mensajes (user+assistant) que se mantienen
+                     # como contexto. Suficiente para conversaciones multi-turno
+                     # sin inflar tokens.
 
 
 # ---------------------------------------------------------------------------
@@ -406,12 +416,70 @@ def dispatch_tool(name: str, args: dict, user_id: str, db: Session, tz: ZoneInfo
 
 
 # ---------------------------------------------------------------------------
+# SYSTEM PROMPT ESTÁTICO
+# Va al inicio del prompt para que OpenAI lo cachee. La fecha dinámica
+# se inserta como mensaje aparte al final (no cacheable, pequeño).
+# ---------------------------------------------------------------------------
+_STATIC_SYSTEM_PROMPT = """Eres ARIA, asistente personal de agenda. Eres amable, directa y eficiente.
+
+INSTRUCCION CRITICA: Para cualquier accion sobre la agenda (crear cita, recordatorio o tarea, consultar eventos, cancelar, reagendar, completar, generar reporte), DEBES usar SIEMPRE las herramientas disponibles. NUNCA respondas como si hubieras realizado una accion sin haber llamado la herramienta correspondiente.
+
+REGLAS:
+1. Responde SIEMPRE en espanol. Sin palabras en ingles.
+2. Cuando el usuario diga "en X minutos" calcula a partir de la FECHA Y HORA ACTUAL que se te indica abajo y suma X minutos para el start_datetime.
+3. Al confirmar una cita, di la hora en formato 12h (ej. 3:30 PM).
+4. Cuando el usuario pregunte por su agenda, llama SIEMPRE a query_agenda primero.
+5. NUNCA inventes, calcules o asumas empalmes de horario. LLAMA a create_event o update_event, y SOLO SI la herramienta te devuelve un JSON indicando conflict=True, entonces avisas al usuario para preguntar si fuerza la creacion. Si la herramienta retorna ok=True, no hay empalme.
+6. Usa el HISTORIAL DE CONVERSACION para entender referencias como "ese", "el de antes", "cancela el que te dije". Si el usuario te pidio algo a medias y vuelve, no le pidas que repita.
+
+FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL del usuario, sin timezone. Ejemplo: 2026-04-22T16:00:00"""
+
+
+# ---------------------------------------------------------------------------
+# Memoria conversacional: cargar y guardar
+# ---------------------------------------------------------------------------
+def _load_history(user_id: str, db: Session, limit: int = HISTORY_LIMIT) -> list:
+    """
+    Carga los últimos `limit` mensajes (user+assistant) del usuario en orden
+    cronológico (más antiguo primero), listos para concatenar en messages.
+    """
+    rows = (
+        db.query(Message)
+        .filter(Message.user_telegram_id == user_id)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()  # cronológico ascendente para el prompt
+    return [{"role": r.role, "content": r.content} for r in rows]
+
+
+def _save_message(user_id: str, role: str, content: str, db: Session) -> None:
+    """Guarda un mensaje en historial. Errores no fatales (memoria es nice-to-have)."""
+    try:
+        db.add(Message(user_telegram_id=user_id, role=role, content=content))
+        db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"No se pudo guardar el mensaje: {e}")
+        db.rollback()
+
+
+def reset_history(user_id: str, db: Session) -> int:
+    """Borra todo el historial conversacional de un usuario. Devuelve cuántos borró."""
+    n = db.query(Message).filter(Message.user_telegram_id == user_id).delete()
+    db.commit()
+    return n
+
+
+# ---------------------------------------------------------------------------
 # FUNCIÓN PRINCIPAL: Procesar mensaje del usuario
 # ---------------------------------------------------------------------------
 def process_message(user_text: str, user_id: str, db: Session, timezone: str = "America/Mexico_City") -> str:
     """
-    Procesa el texto del usuario con GPT-4o usando Function Calling.
-    Retorna el texto de respuesta final del asistente.
+    Procesa el texto del usuario con GPT-4o-mini + function calling.
+    Mantiene memoria conversacional: carga los últimos HISTORY_LIMIT mensajes
+    y guarda el nuevo intercambio al terminar.
     """
     tz      = ZoneInfo(timezone)
     now     = datetime.now(tz)
@@ -419,38 +487,32 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
 
     print(f"[ARIA] process_message invocado: '{user_text[:60]}' | user={user_id} | tz={timezone}")
 
-    system_prompt = f"""Eres ARIA, asistente personal de agenda. Eres amable, directa y eficiente.
+    # Mensaje dinámico pequeño con fecha/hora — va al final para no romper cache
+    dynamic_context = f"FECHA Y HORA ACTUAL: {now_str} (zona horaria: {timezone}). " \
+                      f"Si el usuario dice 'en X minutos', el start_datetime ISO 8601 es " \
+                      f"{(now + timedelta(minutes=5)).strftime('%Y-%m-%dT%H:%M:%S')} para X=5."
 
-FECHA Y HORA ACTUAL: {now_str} (zona: {timezone})
+    # Cargar historial conversacional
+    history = _load_history(user_id, db)
+    print(f"[ARIA] historial cargado: {len(history)} mensajes")
 
-INSTRUCCION CRITICA: Para cualquier accion sobre la agenda (crear cita, recordatorio o tarea, consultar eventos, cancelar, reagendar, completar, generar reporte), DEBES usar SIEMPRE las herramientas disponibles. NUNCA respondas como si hubieras realizado una accion sin haber llamado la herramienta correspondiente.
-
-REGLAS:
-1. Responde SIEMPRE en espanol. Sin palabras en ingles.
-2. "En X minutos" = hora actual + X minutos. Ejemplo: si son las {now_str} y el usuario dice "en 5 minutos", el start_datetime es {(datetime.now(tz) + timedelta(minutes=5)).strftime('%Y-%m-%dT%H:%M:%S')}
-3. Al confirmar una cita, di la hora en formato 12h (ej. 3:30 PM).
-4. Cuando el usuario pregunte por su agenda, llama SIEMPRE a query_agenda primero.
-5. NUNCA inventes, calcules o asumas empalmes de horario. LLAMA a create_event o update_event, y SOLO SI la herramienta te devuelve un JSON indicando conflict=True, entonces avisas al usuario para preguntar si fuerza la creacion. Si la herramienta retorna ok=True, no hay empalme.
-
-FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL. Ejemplo: {now.strftime('%Y-%m-%dT%H:%M:%S')}"""
-
+    # Estructura: system estático (cacheable) + historial + dynamic + nuevo user msg
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": _STATIC_SYSTEM_PROMPT},
+        *history,
+        {"role": "system", "content": dynamic_context},
         {"role": "user",   "content": user_text},
     ]
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto",
-    )
+    # Guardamos el mensaje del usuario en BD inmediatamente para que sobreviva
+    # un crash en mitad del procesamiento.
+    _save_message(user_id, "user", user_text, db)
 
     # ---------------------------------------------------------------------------
     # Bucle agéntico: el LLM puede hacer múltiples rondas de tool calls
-    # (ej: 1ra ronda query_agenda, 2da ronda create_event)
     # ---------------------------------------------------------------------------
     MAX_ITERATIONS = 6
+    final_text = ""
     for iteration in range(MAX_ITERATIONS):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -459,11 +521,20 @@ FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL. Ejemplo
             tool_choice="auto",
         )
         msg = response.choices[0].message
-        print(f"[ARIA] iter={iteration} tool_calls={bool(msg.tool_calls)} content='{str(msg.content)[:60] if msg.content else None}'")
+        print(f"[ARIA] iter={iteration} tool_calls={bool(msg.tool_calls)} "
+              f"content='{str(msg.content)[:60] if msg.content else None}'")
+
+        # Log de cache hit (OpenAI lo expone en usage.prompt_tokens_details.cached_tokens)
+        try:
+            cached = response.usage.prompt_tokens_details.cached_tokens
+            if cached:
+                print(f"[ARIA] cache hit: {cached} tokens cacheados")
+        except Exception:
+            pass
 
         if not msg.tool_calls:
-            # El LLM ya no quiere llamar herramientas: respuesta final
-            return msg.content or ""
+            final_text = msg.content or ""
+            break
 
         # Ejecutar todas las herramientas que el LLM pidió
         messages.append(msg)
@@ -478,6 +549,12 @@ FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL. Ejemplo
                 "tool_call_id": tool_call.id,
                 "content":      result,
             })
+    else:
+        # Demasiadas iteraciones
+        final_text = "Lo siento, tuve un problema procesando tu solicitud. Intenta de nuevo."
 
-    # Si llega aqui es que el LLM hizo demasiadas iteraciones
-    return "Lo siento, tuve un problema procesando tu solicitud. Intenta de nuevo."
+    # Guardar respuesta del asistente para que ARIA la "recuerde" en el siguiente turno
+    if final_text:
+        _save_message(user_id, "assistant", final_text, db)
+
+    return final_text
