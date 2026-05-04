@@ -274,7 +274,14 @@ async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /dashboard — Genera URL firmada al dashboard web
 # ---------------------------------------------------------------------------
 def _make_dashboard_token(telegram_id: str, ttl_hours: int = 24) -> str | None:
-    secret = os.getenv("DASHBOARD_SECRET", "").strip().strip('"').strip("'")
+    raw = os.getenv("DASHBOARD_SECRET", "")
+    secret = raw.strip().strip('"').strip("'")
+    # Debug: imprimir lo que ve el proceso para diagnosticar
+    logger.info(
+        f"[DASHBOARD] DASHBOARD_SECRET raw_len={len(raw)} clean_len={len(secret)} "
+        f"present={bool(secret)} | "
+        f"keys con DASHBOARD: {[k for k in os.environ.keys() if 'DASHBOARD' in k.upper()]}"
+    )
     if not secret:
         return None
     expires = int(time.time()) + ttl_hours * 3600
