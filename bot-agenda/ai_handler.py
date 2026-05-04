@@ -211,15 +211,20 @@ def _exec_create_event(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> d
     logger = logging.getLogger(__name__)
     logger.info(f"CREATE_EVENT args: {args}")
     try:
-        start_utc = _local_to_utc(args["start_datetime"], tz)
-        end_utc   = _local_to_utc(args["end_datetime"], tz) if args.get("end_datetime") else start_utc + timedelta(minutes=30)
-        force     = args.get("force", False)
-        logger.info(f"CREATE_EVENT start_utc={start_utc} end_utc={end_utc}")
+        start_utc  = _local_to_utc(args["start_datetime"], tz)
+        end_utc    = _local_to_utc(args["end_datetime"], tz) if args.get("end_datetime") else start_utc + timedelta(minutes=30)
+        force      = args.get("force", False)
+        event_type = args.get("event_type", "reminder")
+        logger.info(f"CREATE_EVENT start_utc={start_utc} end_utc={end_utc} type={event_type}")
 
-        # Detección de conflictos (a menos que force=True)
-        if not force:
+        # Detección de conflictos: SOLO para meetings (citas con bloque de tiempo).
+        # Reminders y tasks pueden coexistir con otros eventos sin problema
+        # (un recordatorio de tomar agua no bloquea una cita).
+        if event_type == "meeting" and not force:
             try:
                 conflicts = _check_conflicts(start_utc, end_utc, user_id, db)
+                # Solo reportar conflictos con OTROS meetings; reminders/tasks no estorban
+                conflicts = [c for c in conflicts if c.event_type == "meeting"]
             except Exception as ce:
                 logger.error(f"Error en _check_conflicts: {ce}", exc_info=True)
                 conflicts = []  # Si falla la verificación, continuar sin conflictos
@@ -459,7 +464,7 @@ REGLAS GENERALES:
 2. Cuando el usuario diga "en X minutos" calcula a partir de la FECHA Y HORA ACTUAL que se te indica abajo y suma X minutos.
 3. Al confirmar una cita, di la hora en formato 12h (ej. 3:30 PM).
 4. Cuando el usuario pregunte por su agenda, llama SIEMPRE a query_agenda primero.
-5. NUNCA inventes ni asumas empalmes. LLAMA a create_event o update_event, y SOLO SI la herramienta retorna conflict=True, avisa al usuario y pregunta si forzar.
+5. NUNCA inventes ni asumas empalmes. LLAMA a create_event o update_event. La herramienta SOLO te devolvera conflict=True para CITAS (meetings) que se empalman con otras citas. Recordatorios y tareas conviven sin problema con cualquier otro evento (un recordatorio de "tomar agua" puede coincidir con una cita de "lavar el carro" sin problema). SI te llega conflict=True, avisas al usuario y preguntas si forzar.
 6. Usa el HISTORIAL DE CONVERSACION para entender referencias como "ese", "el de antes", "cancela el que te dije". Si el usuario empezo algo y vuelve, no le pidas que repita.
 
 CATEGORIA (obligatoria al crear eventos):

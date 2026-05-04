@@ -241,6 +241,51 @@ p, li, div { color: #0A0A0A; }
     transition: all 150ms ease;
 }
 
+/* Botones primarios: negro tinta, no azul */
+.stButton button[kind="primary"] {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+    border: 1px solid #0A0A0A !important;
+    border-radius: 10px !important;
+    padding: 10px 18px !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    transition: opacity 150ms ease;
+}
+.stButton button[kind="primary"]:hover {
+    background: #525252 !important;
+    border-color: #525252 !important;
+    opacity: 1 !important;
+}
+.stButton button[kind="secondary"] {
+    background: #FFFFFF !important;
+    color: #0A0A0A !important;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 10px !important;
+    padding: 10px 18px !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+}
+.stButton button[kind="secondary"]:hover {
+    border-color: #0A0A0A !important;
+}
+
+/* Form inputs limpios */
+.stTextInput input, .stTextArea textarea, .stSelectbox > div, .stDateInput input, .stTimeInput input {
+    border-radius: 10px !important;
+    border-color: #E5E5E5 !important;
+    font-size: 14px !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: #0A0A0A !important;
+    box-shadow: none !important;
+}
+
+/* Modal/Dialog */
+[data-testid="stDialog"] {
+    border-radius: 16px !important;
+}
+
 /* Expanders como cards minimalistas */
 [data-testid="stExpander"] {
     background: #FFFFFF;

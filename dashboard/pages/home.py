@@ -1,5 +1,5 @@
-"""Home — KPIs grandes, agenda de hoy, sugerencias proactivas."""
-from datetime import datetime, timedelta, timezone
+"""Home — KPIs grandes, agenda de hoy, sugerencias proactivas, crear eventos."""
+from datetime import datetime, timedelta, timezone, date as _date, time as _time
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -12,6 +12,99 @@ inject_css()
 telegram_id = st.session_state.get("telegram_id")
 if not telegram_id:
     st.error("Sesión expirada"); st.stop()
+
+
+# ── Diálogo: Crear nuevo evento ─────────────────────────────────────
+@st.dialog("Nuevo evento", width="large")
+def _crear_evento_dialog(default_tz: str):
+    user_tz = ZoneInfo(default_tz)
+    titulo = st.text_input("Título", placeholder="Ej: Pagar internet")
+
+    col_d, col_t = st.columns(2)
+    with col_d:
+        fecha = st.date_input("Fecha", value=datetime.now(user_tz).date())
+    with col_t:
+        hora = st.time_input("Hora", value=datetime.now(user_tz).replace(second=0, microsecond=0).time(), step=300)
+
+    col_tipo, col_cat = st.columns(2)
+    with col_tipo:
+        tipo = st.selectbox(
+            "Tipo",
+            ["reminder", "meeting", "task"],
+            format_func=lambda x: {"reminder": "Recordatorio", "meeting": "Cita / reunión", "task": "Tarea"}[x],
+        )
+    with col_cat:
+        cat = st.selectbox(
+            "Categoría",
+            list(CATEGORY_LABELS.keys()),
+            index=list(CATEGORY_LABELS.keys()).index("personal"),
+            format_func=lambda x: CATEGORY_LABELS[x],
+        )
+
+    location = st.text_input("Ubicación (opcional)", placeholder="Sala 3 / link de Zoom / dirección")
+    attendees = st.text_input("Participantes (opcional)", placeholder="Pedro, María")
+
+    # Recurrencia con presets inteligentes basados en la fecha elegida
+    dow_code = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"][fecha.weekday()]
+    rec_preset = st.selectbox(
+        "Repetir",
+        ["No repetir", "Diario", f"Cada {fecha.strftime('%A').lower()}", f"Cada día {fecha.day} del mes", "Anual", "Personalizado"],
+    )
+    rec_map = {
+        "No repetir":                                "",
+        "Diario":                                    "daily",
+        f"Cada {fecha.strftime('%A').lower()}":      f"weekly:{dow_code}",
+        f"Cada día {fecha.day} del mes":             f"monthly:{fecha.day}",
+        "Anual":                                     "yearly",
+    }
+    rec_rule = rec_map.get(rec_preset, "")
+    if rec_preset == "Personalizado":
+        rec_rule = st.text_input(
+            "Regla personalizada",
+            placeholder="Ej: every:30m, weekly:MO,WE,FR, monthly:15",
+        )
+
+    desc = st.text_area("Notas (opcional)", placeholder="Detalles, links, contexto…", height=80)
+
+    st.markdown("&nbsp;", unsafe_allow_html=True)
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        cancel = st.button("Cancelar", use_container_width=True)
+    with col_b:
+        crear = st.button("Crear evento", type="primary", use_container_width=True)
+
+    if cancel:
+        st.rerun()
+
+    if crear:
+        if not titulo.strip():
+            st.error("El título es obligatorio.")
+            return
+
+        # Convertir fecha+hora local del usuario a UTC para guardar
+        local_dt = datetime.combine(fecha, hora).replace(tzinfo=user_tz)
+        utc_dt = local_dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+        with SessionLocal() as db:
+            ev = Event(
+                user_telegram_id = telegram_id,
+                title            = titulo.strip(),
+                description      = desc.strip() or None,
+                event_type       = tipo,
+                status           = "pending",
+                start_datetime   = utc_dt,
+                location         = location.strip() or None,
+                attendees        = attendees.strip() or None,
+                recurrence_rule  = rec_rule.strip() or None,
+                category         = cat,
+                created_at       = datetime.utcnow(),
+                updated_at       = datetime.utcnow(),
+            )
+            db.add(ev)
+            db.commit()
+
+        st.success(f"Evento creado: {titulo.strip()}")
+        st.rerun()
 
 
 # ── Datos ─────────────────────────────────────────────────────────
@@ -108,6 +201,14 @@ c1.markdown(kpi_card("Hoy",        str(today_count),    "eventos pendientes"), u
 c2.markdown(kpi_card("Semana",     str(completed_week), "completados (7 días)"), unsafe_allow_html=True)
 c3.markdown(kpi_card("Pendientes", str(pending_total),  "totales"), unsafe_allow_html=True)
 c4.markdown(kpi_card("Racha",      str(streak),         f"día{'s' if streak != 1 else ''} seguidos"), unsafe_allow_html=True)
+
+
+# ── CTA: Nuevo evento ─────────────────────────────────────────────
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+col_btn, _ = st.columns([1, 3])
+with col_btn:
+    if st.button("＋  Nuevo evento", use_container_width=True, type="primary"):
+        _crear_evento_dialog(user.timezone if user and user.timezone else "America/Mexico_City")
 
 
 # ── Agenda de hoy ──────────────────────────────────────────────────
