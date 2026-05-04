@@ -173,27 +173,55 @@ if upcoming_events:
         )
 
 
-# ── Distribución por categoría ─────────────────────────────────────
+# ── Distribución por categoría (expandible para ver eventos) ───────
 if cat_counts and sum(cat_counts.values()) > 0:
     st.markdown("## Por categoría")
+    st.markdown(
+        f'<p class="subhead" style="margin-top:-0.5rem;">'
+        f'Click para ver los eventos de cada categoría'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
+
+    from recurrence_helper import describe_rule
     total = sum(cat_counts.values())
     sorted_cats = sorted(cat_counts.items(), key=lambda x: -x[1])
+
     for cat, n in sorted_cats:
         color = CATEGORY_COLORS.get(cat, COLORS["ink_muted"])
         label = CATEGORY_LABELS.get(cat, "Otros")
         pct = int(n / total * 100)
-        st.markdown(
-            f'<div style="display:flex;align-items:center;justify-content:space-between;'
-            f'padding:10px 16px;background:#FFFFFF;border:1px solid {COLORS["border"]};'
-            f'border-radius:10px;margin-bottom:6px;">'
-            f'<span><span class="cat-dot" style="background:{color}"></span>{label}</span>'
-            f'<span style="font-family:JetBrains Mono;font-variant-numeric:tabular-nums;'
-            f'color:{COLORS["ink_soft"]};font-size:13px;">'
-            f'<strong style="color:{COLORS["ink"]};">{n}</strong> · {pct}%'
-            f'</span>'
-            f'</div>',
-            unsafe_allow_html=True,
+        events_in_cat = sorted(
+            [e for e in all_pending if (e.category or "otros") == cat],
+            key=lambda e: e.start_datetime,
         )
+
+        # Expander con header personalizado (label + counts)
+        with st.expander(f"  ●   {label}    —    {n}  ·  {pct}%"):
+            for ev in events_in_cat:
+                local_dt = ev.start_datetime.replace(tzinfo=timezone.utc).astimezone(tz)
+                if ev.all_day:
+                    fecha = local_dt.strftime("%a %d/%m").capitalize()
+                else:
+                    fecha = local_dt.strftime("%a %d/%m · %I:%M %p").lstrip("0")
+                fecha = fecha.replace("AM", "AM").replace("PM", "PM")  # noop, cosmetic
+
+                meta = []
+                if ev.location:        meta.append(ev.location)
+                if ev.attendees:       meta.append(f"con {ev.attendees}")
+                if ev.recurrence_rule: meta.append(describe_rule(ev.recurrence_rule))
+                meta_text = " · ".join(meta) if meta else "—"
+
+                st.markdown(
+                    f'<div class="event-card" style="margin:8px 0;">'
+                    f'<div class="event-time">{fecha}</div>'
+                    f'<div class="event-title">'
+                    f'<span class="cat-dot" style="background:{color}"></span>{ev.title}'
+                    f'</div>'
+                    f'<div class="event-meta">{meta_text}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
 
 # ── Sugerencias proactivas ─────────────────────────────────────────

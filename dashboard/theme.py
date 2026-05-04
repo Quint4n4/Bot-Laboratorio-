@@ -241,6 +241,34 @@ p, li, div { color: #0A0A0A; }
     transition: all 150ms ease;
 }
 
+/* Expanders como cards minimalistas */
+[data-testid="stExpander"] {
+    background: #FFFFFF;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
+    transition: border-color 200ms ease;
+    box-shadow: none !important;
+}
+[data-testid="stExpander"]:hover { border-color: #0A0A0A !important; }
+[data-testid="stExpander"] summary {
+    padding: 14px 18px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #0A0A0A !important;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}
+[data-testid="stExpander"] summary:hover { color: #0A0A0A !important; }
+[data-testid="stExpander"] details[open] summary {
+    border-bottom: 1px solid #F0F0F0;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    padding: 0 18px 12px 18px !important;
+}
+[data-testid="stExpander"] svg { color: #A3A3A3 !important; }
+
 hr {
     border: none;
     border-top: 1px solid #E5E5E5;
