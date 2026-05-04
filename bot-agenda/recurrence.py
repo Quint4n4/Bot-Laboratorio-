@@ -8,14 +8,19 @@ Formatos soportados (simples, fáciles de generar por GPT):
 - "weekly:MO,WE,FR"        → lunes, miércoles y viernes
 - "monthly:7"              → cada mes el día 7
 - "yearly"                 → mismo día año tras año
+- "every:5m"               → cada 5 minutos (sub-diario)
+- "every:2h"               → cada 2 horas
+- "every:3d"               → cada 3 días
 
 Cualquier valor desconocido devuelve None (sin recurrencia válida).
 """
-from datetime import datetime, timedelta
 import calendar
+import re
+from datetime import datetime, timedelta
 
 
 _DOW_MAP = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+_INTERVAL_RE = re.compile(r"^(\d+)\s*(m|h|d)$", re.IGNORECASE)
 
 
 def next_occurrence(rule: str, current: datetime) -> datetime | None:
@@ -26,6 +31,19 @@ def next_occurrence(rule: str, current: datetime) -> datetime | None:
     if not rule:
         return None
     rule = rule.strip().lower()
+
+    # ── EVERY:Nm / Nh / Nd (sub-diaria con N en minutos/horas/días) ──
+    if rule.startswith("every:"):
+        m = _INTERVAL_RE.match(rule.split(":", 1)[1].strip())
+        if not m:
+            return None
+        n, unit = int(m.group(1)), m.group(2).lower()
+        if n <= 0:
+            return None
+        delta = {"m": timedelta(minutes=n),
+                 "h": timedelta(hours=n),
+                 "d": timedelta(days=n)}[unit]
+        return current + delta
 
     # ── DAILY ──────────────────────────────────────────────
     if rule == "daily":
@@ -79,6 +97,14 @@ def describe_rule(rule: str) -> str:
     if not rule:
         return ""
     rule = rule.strip().lower()
+    if rule.startswith("every:"):
+        m = _INTERVAL_RE.match(rule.split(":", 1)[1].strip())
+        if m:
+            n, unit = int(m.group(1)), m.group(2).lower()
+            unit_es = {"m": "minuto" if n == 1 else "minutos",
+                       "h": "hora"   if n == 1 else "horas",
+                       "d": "día"    if n == 1 else "días"}[unit]
+            return f"cada {n} {unit_es}"
     if rule == "daily":
         return "todos los días"
     if rule.startswith("weekly:"):

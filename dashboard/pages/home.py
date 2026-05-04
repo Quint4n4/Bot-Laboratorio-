@@ -69,6 +69,24 @@ with SessionLocal() as db:
         Event.status == "pending",
     ).order_by(Event.start_datetime).all()
 
+    # Próximos eventos (después de hoy, próximos 30 días)
+    horizon = now_utc + timedelta(days=30)
+    upcoming_events = db.query(Event).filter(
+        Event.user_telegram_id == telegram_id,
+        Event.start_datetime > today_end_utc,
+        Event.start_datetime <= horizon,
+        Event.status == "pending",
+    ).order_by(Event.start_datetime).limit(5).all()
+
+    # Distribución por categoría (todos los pendientes)
+    all_pending = db.query(Event).filter(
+        Event.user_telegram_id == telegram_id,
+        Event.status == "pending",
+    ).all()
+    cat_counts: dict[str, int] = {}
+    for e in all_pending:
+        cat_counts[e.category or "otros"] = cat_counts.get(e.category or "otros", 0) + 1
+
 
 # ── Render ─────────────────────────────────────────────────────────
 st.markdown("# Inicio")
@@ -111,7 +129,9 @@ else:
         meta = []
         if ev.location:        meta.append(ev.location)
         if ev.attendees:       meta.append(f"con {ev.attendees}")
-        if ev.recurrence_rule: meta.append("recurrente")
+        if ev.recurrence_rule:
+            from recurrence_helper import describe_rule
+            meta.append(describe_rule(ev.recurrence_rule))
         meta_text = " · ".join(meta) if meta else cat_label
 
         st.markdown(
@@ -121,6 +141,56 @@ else:
             f'<span class="cat-dot" style="background:{cat_color}"></span>{ev.title}'
             f'</div>'
             f'<div class="event-meta">{meta_text}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ── Próximos eventos (después de hoy) ──────────────────────────────
+if upcoming_events:
+    st.markdown("## Próximos")
+    from recurrence_helper import describe_rule
+    for ev in upcoming_events:
+        local_dt = ev.start_datetime.replace(tzinfo=timezone.utc).astimezone(tz)
+        fecha    = local_dt.strftime("%a %d/%m · %I:%M %p").lstrip("0")
+        cat      = ev.category or "otros"
+        cat_color = CATEGORY_COLORS.get(cat, COLORS["ink_muted"])
+        cat_label = CATEGORY_LABELS.get(cat, "Otros")
+        meta = [cat_label]
+        if ev.recurrence_rule:
+            meta.append(describe_rule(ev.recurrence_rule))
+        meta_text = " · ".join(meta)
+
+        st.markdown(
+            f'<div class="event-card">'
+            f'<div class="event-time">{fecha}</div>'
+            f'<div class="event-title">'
+            f'<span class="cat-dot" style="background:{cat_color}"></span>{ev.title}'
+            f'</div>'
+            f'<div class="event-meta">{meta_text}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ── Distribución por categoría ─────────────────────────────────────
+if cat_counts and sum(cat_counts.values()) > 0:
+    st.markdown("## Por categoría")
+    total = sum(cat_counts.values())
+    sorted_cats = sorted(cat_counts.items(), key=lambda x: -x[1])
+    for cat, n in sorted_cats:
+        color = CATEGORY_COLORS.get(cat, COLORS["ink_muted"])
+        label = CATEGORY_LABELS.get(cat, "Otros")
+        pct = int(n / total * 100)
+        st.markdown(
+            f'<div style="display:flex;align-items:center;justify-content:space-between;'
+            f'padding:10px 16px;background:#FFFFFF;border:1px solid {COLORS["border"]};'
+            f'border-radius:10px;margin-bottom:6px;">'
+            f'<span><span class="cat-dot" style="background:{color}"></span>{label}</span>'
+            f'<span style="font-family:JetBrains Mono;font-variant-numeric:tabular-nums;'
+            f'color:{COLORS["ink_soft"]};font-size:13px;">'
+            f'<strong style="color:{COLORS["ink"]};">{n}</strong> · {pct}%'
+            f'</span>'
             f'</div>',
             unsafe_allow_html=True,
         )

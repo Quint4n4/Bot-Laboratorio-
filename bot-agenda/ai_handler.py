@@ -481,6 +481,9 @@ Si el usuario dice "cada", "todos los", "siempre", agrega recurrence_rule:
 - "lunes, miercoles y viernes"         → recurrence_rule="weekly:MO,WE,FR"
 - "todos los dias"                     → recurrence_rule="daily"
 - "cada ano el 15 de mayo"             → recurrence_rule="yearly"
+- "cada 5 minutos tomar agua"          → recurrence_rule="every:5m"
+- "cada 2 horas estirate"              → recurrence_rule="every:2h"
+- "cada 3 dias riega las plantas"      → recurrence_rule="every:3d"
 NO inventes recurrencia si el usuario solo lo pidio una vez.
 
 FORMATO start_datetime: ISO 8601 hora LOCAL sin timezone. Ej: 2026-04-22T16:00:00"""

@@ -1,10 +1,21 @@
 """Versión legible en español de un recurrence_rule. Espejo de bot-agenda/recurrence.py."""
+import re
+
+_INTERVAL_RE = re.compile(r"^(\d+)\s*(m|h|d)$", re.IGNORECASE)
 
 
 def describe_rule(rule: str) -> str:
     if not rule:
         return ""
     rule = rule.strip().lower()
+    if rule.startswith("every:"):
+        m = _INTERVAL_RE.match(rule.split(":", 1)[1].strip())
+        if m:
+            n, unit = int(m.group(1)), m.group(2).lower()
+            unit_es = {"m": "minuto" if n == 1 else "minutos",
+                       "h": "hora"   if n == 1 else "horas",
+                       "d": "día"    if n == 1 else "días"}[unit]
+            return f"cada {n} {unit_es}"
     if rule == "daily":
         return "todos los días"
     if rule.startswith("weekly:"):
