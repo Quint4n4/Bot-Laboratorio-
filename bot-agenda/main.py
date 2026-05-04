@@ -2,9 +2,12 @@
 main.py - Punto de entrada del Bot de Agenda en Telegram
 Agenda Bot - Asistente Personal (ARIA)
 """
+import hashlib
+import hmac
 import logging
 import os
 import tempfile
+import time
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -125,6 +128,7 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /voz — Activar/desactivar respuestas en audio\n"
         "• /perfil — Ver y cambiar tu configuración\n"
         "• /sugerencias — Patrones detectados y consejos\n"
+        "• /dashboard — Abrir el dashboard web\n"
         "• /olvidar — Borrar el historial conversacional\n"
         "• /cancelar — Salir del modo edición\n\n"
         "💬 *O simplemente escríbeme lo que necesitas en lenguaje natural:*\n"
@@ -262,6 +266,45 @@ async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     await update.effective_message.reply_text(
         "📊 ¿Qué período quieres reportar?",
+        reply_markup=keyboard,
+    )
+
+
+# ---------------------------------------------------------------------------
+# /dashboard — Genera URL firmada al dashboard web
+# ---------------------------------------------------------------------------
+def _make_dashboard_token(telegram_id: str, ttl_hours: int = 24) -> str | None:
+    secret = os.getenv("DASHBOARD_SECRET", "").strip().strip('"').strip("'")
+    if not secret:
+        return None
+    expires = int(time.time()) + ttl_hours * 3600
+    payload = f"{telegram_id}:{expires}"
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    token = _make_dashboard_token(user_id)
+
+    if not token:
+        await update.effective_message.reply_text(
+            "⚠️ El dashboard no está configurado. Falta `DASHBOARD_SECRET` en las variables de entorno.",
+            parse_mode="Markdown",
+        )
+        return
+
+    base_url = (os.getenv("DASHBOARD_URL", "") or "https://aria-dashboard.streamlit.app").strip().strip('"').strip("'")
+    full_url = f"{base_url}/?token={token}"
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔗 Abrir dashboard", url=full_url)
+    ]])
+    await update.effective_message.reply_text(
+        "📊 *Tu dashboard personal*\n\n"
+        "Este enlace es exclusivo para ti y expira en *24 horas*. "
+        "Pídeme uno nuevo cuando lo necesites con `/dashboard`.",
+        parse_mode="Markdown",
         reply_markup=keyboard,
     )
 
@@ -577,6 +620,7 @@ def main():
     app.add_handler(CommandHandler("olvidar",     cmd_olvidar))
     app.add_handler(CommandHandler("sugerencias", cmd_sugerencias))
     app.add_handler(CommandHandler("cancelar",    cmd_cancelar))
+    app.add_handler(CommandHandler("dashboard",   cmd_dashboard))
 
     # Mensajes libres
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
