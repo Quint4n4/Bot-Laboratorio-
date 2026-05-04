@@ -273,15 +273,21 @@ async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 # /dashboard — Genera URL firmada al dashboard web
 # ---------------------------------------------------------------------------
+def _get_env_tolerant(name: str, default: str = "") -> str:
+    """
+    Lee una variable de entorno tolerando whitespace tanto en el NOMBRE
+    como en el VALOR. Cubre el caso comun de pegar un espacio invisible
+    al crear variables en Railway u otras plataformas.
+    """
+    target = name.strip().upper()
+    for key, val in os.environ.items():
+        if key.strip().upper() == target:
+            return val.strip().strip('"').strip("'")
+    return default
+
+
 def _make_dashboard_token(telegram_id: str, ttl_hours: int = 24) -> str | None:
-    raw = os.getenv("DASHBOARD_SECRET", "")
-    secret = raw.strip().strip('"').strip("'")
-    # Debug: imprimir lo que ve el proceso para diagnosticar
-    logger.info(
-        f"[DASHBOARD] DASHBOARD_SECRET raw_len={len(raw)} clean_len={len(secret)} "
-        f"present={bool(secret)} | "
-        f"keys con DASHBOARD: {[k for k in os.environ.keys() if 'DASHBOARD' in k.upper()]}"
-    )
+    secret = _get_env_tolerant("DASHBOARD_SECRET")
     if not secret:
         return None
     expires = int(time.time()) + ttl_hours * 3600
@@ -301,7 +307,7 @@ async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    base_url = (os.getenv("DASHBOARD_URL", "") or "https://aria-dashboard.streamlit.app").strip().strip('"').strip("'")
+    base_url = _get_env_tolerant("DASHBOARD_URL") or "https://aria-dashboard.streamlit.app"
     full_url = f"{base_url}/?token={token}"
 
     keyboard = InlineKeyboardMarkup([[
