@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from database import Event, User, EventStatus, SessionLocal
 from pdf_generator import generate_daily_briefing, generate_evening_wrapup
+from recurrence import next_occurrence
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,26 @@ async def check_due_reminders():
                     )
                 os.unlink(audio_path)
 
+            # ── Recurrencia ──────────────────────────────────────────
+            # Si el evento tiene regla de recurrencia, avanzar a la siguiente
+            # ocurrencia en lugar de marcarlo como ya enviado para siempre.
+            # El mismo Event row se reutiliza ciclo tras ciclo.
+            if event.recurrence_rule:
+                nxt = next_occurrence(event.recurrence_rule, event.start_datetime)
+                if nxt:
+                    event.start_datetime  = nxt
+                    if event.end_datetime:
+                        # Mantener duración relativa
+                        delta = event.end_datetime - event.last_reminded_at if event.last_reminded_at else None
+                        event.end_datetime = nxt + (delta if delta else timedelta(minutes=30))
+                    event.reminder_sent    = False    # se volverá a disparar al llegar la fecha
+                    event.last_reminded_at = now_utc
+                    event.followup_count   = 0
+                    db.commit()
+                    logger.info(f"[RECURRENCE] {event.id} '{event.title}' → próxima: {nxt}")
+                    continue
+
+            # ── Evento normal (sin recurrencia) ──────────────────────
             event.reminder_sent    = True
             event.last_reminded_at = now_utc
             event.followup_count   = 0
@@ -228,6 +249,20 @@ async def morning_briefing():
                         reply_markup=_cache_text_btn(speech),
                     )
                 os.unlink(audio_path)
+
+            # ── Sugerencias proactivas (1 al día con el briefing) ──────
+            try:
+                from ai_handler import analyze_patterns
+                tips = analyze_patterns(user.telegram_id, db)
+                if tips:
+                    msg_tips = "🤖 *Antes de empezar el día:*\n\n" + "\n\n".join(tips[:2])
+                    await _app.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=msg_tips,
+                        parse_mode="Markdown",
+                    )
+            except Exception as ex:
+                logger.warning(f"No se pudieron generar sugerencias proactivas: {ex}")
 
     except Exception as e:
         logger.error(f"Error en morning_briefing: {e}")

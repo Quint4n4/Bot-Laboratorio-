@@ -18,7 +18,7 @@ from telegram.ext import (
 )
 
 from database import init_db, SessionLocal, User, Event, EventStatus
-from ai_handler import process_message, reset_history
+from ai_handler import process_message, reset_history, analyze_patterns
 from voice_handler import transcribe_voice, text_to_speech
 from scheduler import start_scheduler
 from pdf_generator import generate_productivity_report
@@ -124,7 +124,9 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /reporte — Reporte de productividad (diario/semanal/mensual)\n"
         "• /voz — Activar/desactivar respuestas en audio\n"
         "• /perfil — Ver y cambiar tu configuración\n"
-        "• /olvidar — Borrar el historial conversacional\n\n"
+        "• /sugerencias — Patrones detectados y consejos\n"
+        "• /olvidar — Borrar el historial conversacional\n"
+        "• /cancelar — Salir del modo edición\n\n"
         "💬 *O simplemente escríbeme lo que necesitas en lenguaje natural:*\n"
         "_'Agéndame una junta el martes a las 3 PM'_\n"
         "_'Cancela mi cita del viernes'_\n"
@@ -161,20 +163,51 @@ async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_text_and_voice(update, user, "📭 No tienes eventos pendientes para hoy. ¡Día libre! 🎉", context=context)
         return
 
-    lines = ["📅 *Tu agenda de hoy:*\n"]
+    # Cabecera
+    await update.effective_message.reply_text(
+        f"📅 *Tu agenda de hoy* — {len(events)} evento{'s' if len(events) > 1 else ''}",
+        parse_mode="Markdown",
+    )
+
+    # Cada evento como mensaje independiente con sus botones
+    cat_emoji = {
+        "personal": "🏠", "trabajo": "💼", "salud": "❤️",
+        "finanzas": "💰", "familia": "👨‍👩‍👧", "social": "🎉", "otros": "📌",
+    }
+    type_emoji = {"reminder": "⏰", "meeting": "📅", "task": "✅"}
+
+    from recurrence import describe_rule
     for ev in events:
         hora = ev.start_datetime.strftime("%I:%M %p").lstrip("0")
-        icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(ev.event_type, "•")
-        lines.append(f"{icon} `{hora}` — {ev.title}  _(ID: {ev.id})_")
+        icon = type_emoji.get(ev.event_type, "•")
+        cat  = cat_emoji.get(ev.category or "otros", "📌")
+        text = f"{icon} `{hora}` — *{ev.title}*  {cat}\n_ID: {ev.id}_"
+
         meta = []
         if ev.location:        meta.append(f"📍 {ev.location}")
         if ev.attendees:       meta.append(f"👥 {ev.attendees}")
-        if ev.recurrence_rule: meta.append(f"🔁 {ev.recurrence_rule}")
+        if ev.recurrence_rule: meta.append(f"🔁 {describe_rule(ev.recurrence_rule)}")
         if ev.tags:            meta.append(f"🏷️ {ev.tags}")
         if meta:
-            lines.append("    " + "  •  ".join(meta))
+            text += "\n" + " · ".join(meta)
 
-    await send_text_and_voice(update, user, "\n".join(lines), context=context)
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅",       callback_data=f"complete:{ev.id}"),
+            InlineKeyboardButton("⏰+15",    callback_data=f"snooze15:{ev.id}"),
+            InlineKeyboardButton("📝 Editar",callback_data=f"edit:{ev.id}"),
+            InlineKeyboardButton("❌",       callback_data=f"cancel:{ev.id}"),
+        ]])
+
+        await update.effective_message.reply_text(
+            text, parse_mode="Markdown", reply_markup=keyboard,
+        )
+
+    if user.voice_replies:
+        speech = f"Tienes {len(events)} evento{'s' if len(events) > 1 else ''} para hoy."
+        audio_path = await text_to_speech(speech, voice=user.voice_persona or "nova")
+        with open(audio_path, "rb") as f:
+            await update.effective_message.reply_voice(voice=f)
+        os.unlink(audio_path)
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +264,38 @@ async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 ¿Qué período quieres reportar?",
         reply_markup=keyboard,
     )
+
+
+# ---------------------------------------------------------------------------
+# /sugerencias — Análisis proactivo de patrones
+# ---------------------------------------------------------------------------
+async def cmd_sugerencias(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        sugerencias = analyze_patterns(user_id, db)
+    finally:
+        db.close()
+
+    if not sugerencias:
+        await update.effective_message.reply_text(
+            "✨ Todo se ve bien, no detecté patrones que valga la pena mejorar."
+        )
+        return
+
+    text = "🤖 *Sugerencias detectadas:*\n\n" + "\n\n".join(sugerencias)
+    await update.effective_message.reply_text(text, parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
+# /cancelar — Salir del modo edición (o cualquier flujo conversacional)
+# ---------------------------------------------------------------------------
+async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    had_edit = context.user_data.pop("editing_event_id", None)
+    if had_edit:
+        await update.effective_message.reply_text("✅ Cancelé el modo edición.")
+    else:
+        await update.effective_message.reply_text("No hay nada que cancelar.")
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +371,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.effective_message.reply_chat_action("typing")
 
-    response = process_message(user_text, user_id, db, timezone=user.timezone or "America/Mexico_City")
+    # ── Modo edición de evento ────────────────────────────────
+    editing_id = context.user_data.pop("editing_event_id", None)
+    if editing_id:
+        edit_prompt = (
+            f"El usuario quiere editar el evento con event_id={editing_id}. "
+            f"Su instrucción es: '{user_text}'. "
+            f"Llama update_event con event_id={editing_id} y los campos que correspondan."
+        )
+        response = process_message(edit_prompt, user_id, db, timezone=user.timezone or "America/Mexico_City")
+    else:
+        response = process_message(user_text, user_id, db, timezone=user.timezone or "America/Mexico_City")
 
     await send_text_and_voice(update, user, response, context=context)
     db.close()
@@ -380,6 +455,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text(text, parse_mode="Markdown")
             else:
                 await query.message.reply_text("⚠️ No pude recuperar el texto (el bot se reinició desde que recibiste este audio).")
+            return
+
+        # --- Editar evento (modo conversacional) ---
+        if data.startswith("edit:"):
+            event_id = int(data.split(":")[1])
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if not event:
+                await query.message.reply_text("❌ Ese evento ya no existe.")
+                return
+            # Guardar el contexto de edición
+            context.user_data["editing_event_id"] = event_id
+            await query.message.reply_text(
+                f"✏️ Editando *{event.title}*\n\n"
+                "Dime qué quieres cambiar en lenguaje natural. Ejemplos:\n"
+                "• _'cambia la hora a las 11 AM'_\n"
+                "• _'reagéndalo para el viernes'_\n"
+                "• _'cambia el título a Junta semanal'_\n"
+                "• _'agrégale ubicación: Sala 3'_\n\n"
+                "Escribe /cancelar para salir del modo edición.",
+                parse_mode="Markdown",
+            )
             return
 
         # --- Completar evento ---
@@ -476,9 +572,11 @@ def main():
     app.add_handler(CommandHandler("agenda",  cmd_agenda))
     app.add_handler(CommandHandler("semana",  cmd_semana))
     app.add_handler(CommandHandler("reporte", cmd_reporte))
-    app.add_handler(CommandHandler("voz",     cmd_voz))
-    app.add_handler(CommandHandler("perfil",  cmd_perfil))
-    app.add_handler(CommandHandler("olvidar", cmd_olvidar))
+    app.add_handler(CommandHandler("voz",         cmd_voz))
+    app.add_handler(CommandHandler("perfil",      cmd_perfil))
+    app.add_handler(CommandHandler("olvidar",     cmd_olvidar))
+    app.add_handler(CommandHandler("sugerencias", cmd_sugerencias))
+    app.add_handler(CommandHandler("cancelar",    cmd_cancelar))
 
     # Mensajes libres
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

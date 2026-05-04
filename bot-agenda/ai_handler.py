@@ -62,9 +62,10 @@ TOOLS = [
                     "all_day":         {"type": "boolean", "description": "True si el evento es de todo el día"},
                     "description":     {"type": "string",  "description": "Detalle opcional"},
                     "location":        {"type": "string",  "description": "Lugar fisico (direccion) o link de videollamada (Zoom, Meet, etc.)"},
-                    "recurrence_rule": {"type": "string",  "description": "Si el evento se repite. Formatos: 'daily', 'weekly:MO,WE,FR', 'weekly:MO', 'monthly:15', 'yearly'. Ejemplo: 'todos los lunes a las 9' = 'weekly:MO'"},
+                    "recurrence_rule": {"type": "string",  "description": "Si el evento se repite. Formatos: 'daily', 'weekly:MO,WE,FR', 'weekly:MO', 'monthly:7' (cada dia 7 del mes), 'yearly'. Ejemplo: 'todos los lunes a las 9' = 'weekly:MO'; 'cada dia 7 del mes pagar internet' = 'monthly:7'"},
                     "attendees":       {"type": "string",  "description": "Nombres o emails de otros participantes separados por coma. Ejemplo: 'Pedro, Maria'"},
-                    "tags":            {"type": "string",  "description": "Categorias separadas por coma. Ejemplo: 'trabajo,proyecto-alpha' o 'salud'"},
+                    "tags":            {"type": "string",  "description": "Etiquetas libres adicionales separadas por coma. Ejemplo: 'proyecto-alpha,urgente'. NO uses tags para categorias generales (eso es 'category')"},
+                    "category":        {"type": "string",  "enum": ["personal", "trabajo", "salud", "finanzas", "familia", "social", "otros"], "description": "Categoria principal del evento. Inferela del contexto: 'pagar internet' = finanzas, 'cita medico' = salud, 'reporte al jefe' = trabajo, 'cumpleanos mama' = familia."},
                     "force":           {"type": "boolean", "description": "Si es True, crea el evento aunque haya conflicto"},
                 },
                 "required": ["title", "event_type", "start_datetime"],
@@ -87,7 +88,8 @@ TOOLS = [
                     "new_location":        {"type": "string",  "description": "Nuevo lugar o link"},
                     "new_recurrence_rule": {"type": "string",  "description": "Nueva regla de recurrencia (o cadena vacia para quitar)"},
                     "new_attendees":       {"type": "string",  "description": "Nueva lista de participantes (CSV)"},
-                    "new_tags":            {"type": "string",  "description": "Nuevos tags (CSV)"},
+                    "new_tags":            {"type": "string",  "description": "Nuevos tags libres (CSV)"},
+                    "new_category":        {"type": "string",  "enum": ["personal", "trabajo", "salud", "finanzas", "familia", "social", "otros"], "description": "Nueva categoria"},
                 },
                 "required": ["event_id"],
             },
@@ -246,6 +248,7 @@ def _exec_create_event(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> d
             recurrence_rule=args.get("recurrence_rule"),
             attendees=args.get("attendees"),
             tags=args.get("tags"),
+            category=args.get("category", "otros"),
         )
         db.add(event)
         db.commit()
@@ -308,6 +311,8 @@ def _exec_update_event(args: dict, db: Session, tz: ZoneInfo) -> dict:
         event.attendees = args["new_attendees"] or None
     if "new_tags" in args:
         event.tags = args["new_tags"] or None
+    if "new_category" in args:
+        event.category = args["new_category"] or "otros"
     db.commit()
     return {"ok": True, "event_id": event.id}
 
@@ -366,6 +371,7 @@ def _exec_query_agenda(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> d
                 "recurrence_rule": e.recurrence_rule,
                 "attendees": e.attendees,
                 "tags": e.tags,
+                "category": e.category,
             }
             for e in events
         ]
@@ -448,15 +454,36 @@ _STATIC_SYSTEM_PROMPT = """Eres ARIA, asistente personal de agenda. Eres amable,
 
 INSTRUCCION CRITICA: Para cualquier accion sobre la agenda (crear cita, recordatorio o tarea, consultar eventos, cancelar, reagendar, completar, generar reporte), DEBES usar SIEMPRE las herramientas disponibles. NUNCA respondas como si hubieras realizado una accion sin haber llamado la herramienta correspondiente.
 
-REGLAS:
+REGLAS GENERALES:
 1. Responde SIEMPRE en espanol. Sin palabras en ingles.
-2. Cuando el usuario diga "en X minutos" calcula a partir de la FECHA Y HORA ACTUAL que se te indica abajo y suma X minutos para el start_datetime.
+2. Cuando el usuario diga "en X minutos" calcula a partir de la FECHA Y HORA ACTUAL que se te indica abajo y suma X minutos.
 3. Al confirmar una cita, di la hora en formato 12h (ej. 3:30 PM).
 4. Cuando el usuario pregunte por su agenda, llama SIEMPRE a query_agenda primero.
-5. NUNCA inventes, calcules o asumas empalmes de horario. LLAMA a create_event o update_event, y SOLO SI la herramienta te devuelve un JSON indicando conflict=True, entonces avisas al usuario para preguntar si fuerza la creacion. Si la herramienta retorna ok=True, no hay empalme.
-6. Usa el HISTORIAL DE CONVERSACION para entender referencias como "ese", "el de antes", "cancela el que te dije". Si el usuario te pidio algo a medias y vuelve, no le pidas que repita.
+5. NUNCA inventes ni asumas empalmes. LLAMA a create_event o update_event, y SOLO SI la herramienta retorna conflict=True, avisa al usuario y pregunta si forzar.
+6. Usa el HISTORIAL DE CONVERSACION para entender referencias como "ese", "el de antes", "cancela el que te dije". Si el usuario empezo algo y vuelve, no le pidas que repita.
 
-FORMATO de start_datetime para las herramientas: ISO 8601 en hora LOCAL del usuario, sin timezone. Ejemplo: 2026-04-22T16:00:00"""
+CATEGORIA (obligatoria al crear eventos):
+Siempre incluye "category" al crear o editar un evento. Inferela del contexto:
+- personal:  rutinas, hobbies, recordatorios genericos sin tema especifico
+- trabajo:   reuniones laborales, deadlines, reportes, llamadas con clientes/jefe
+- salud:     citas medicas, gym, nutricion, medicamentos
+- finanzas:  pagos, transferencias, vencimientos, cobros, recibos (luz, internet, renta)
+- familia:   cumpleanos, eventos familiares, llamadas con padres/hijos
+- social:    salidas con amigos, fiestas, eventos publicos
+- otros:     solo cuando ninguna otra encaje claramente
+Ejemplos: "pagar internet" = finanzas | "cita con dentista" = salud |
+"reporte al jefe" = trabajo | "cumple de mama" = familia | "cena con amigos" = social.
+
+RECURRENCIA (cuando el usuario lo indica explicito):
+Si el usuario dice "cada", "todos los", "siempre", agrega recurrence_rule:
+- "cada dia 7 del mes pagar internet"  → recurrence_rule="monthly:7"
+- "todos los lunes a las 9"            → recurrence_rule="weekly:MO"
+- "lunes, miercoles y viernes"         → recurrence_rule="weekly:MO,WE,FR"
+- "todos los dias"                     → recurrence_rule="daily"
+- "cada ano el 15 de mayo"             → recurrence_rule="yearly"
+NO inventes recurrencia si el usuario solo lo pidio una vez.
+
+FORMATO start_datetime: ISO 8601 hora LOCAL sin timezone. Ej: 2026-04-22T16:00:00"""
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +521,78 @@ def reset_history(user_id: str, db: Session) -> int:
     n = db.query(Message).filter(Message.user_telegram_id == user_id).delete()
     db.commit()
     return n
+
+
+# ---------------------------------------------------------------------------
+# Modo proactivo: detectar patrones y sugerir mejoras al usuario
+# ---------------------------------------------------------------------------
+def analyze_patterns(user_id: str, db: Session) -> list[str]:
+    """
+    Analiza la actividad del usuario y devuelve una lista de sugerencias.
+    Lista vacía = nada interesante que reportar.
+
+    Patrones detectados (v1):
+    - Eventos repetidos manualmente (>=3 veces en 90 días) que podrían ser recurrentes
+    - Tareas pendientes desde hace >7 días (procrastinación)
+    - Racha de productividad (>=70% completado en últimos 7 días)
+    """
+    suggestions = []
+    now = datetime.utcnow()
+
+    # ── Patrón 1: Eventos creados manualmente ≥3 veces en 90 días → sugerir recurrencia
+    cutoff_90d = now - timedelta(days=90)
+    eventos_recientes = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.created_at >= cutoff_90d,
+        Event.recurrence_rule.is_(None),
+    ).all()
+
+    titulos_count: dict[str, int] = {}
+    for e in eventos_recientes:
+        key = e.title.strip().lower()
+        titulos_count[key] = titulos_count.get(key, 0) + 1
+    for titulo_lc, count in titulos_count.items():
+        if count >= 3:
+            # Recuperar el título original (con mayúsculas)
+            original = next(
+                (e.title for e in eventos_recientes if e.title.strip().lower() == titulo_lc),
+                titulo_lc,
+            )
+            suggestions.append(
+                f"💡 Has creado *{original}* {count} veces en los últimos 90 días. "
+                f"¿Quieres que lo haga recurrente automáticamente?"
+            )
+
+    # ── Patrón 2: Tareas pendientes desde hace >7 días
+    cutoff_7d = now - timedelta(days=7)
+    stale = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.status == EventStatus.pending,
+        Event.start_datetime < cutoff_7d,
+    ).count()
+    if stale >= 3:
+        suggestions.append(
+            f"⚠️ Tienes *{stale} tareas* pendientes desde hace más de una semana. "
+            f"¿Las cancelamos o las reagendamos?"
+        )
+
+    # ── Patrón 3: Racha de productividad
+    cutoff_recent = now - timedelta(days=7)
+    last_week = db.query(Event).filter(
+        Event.user_telegram_id == user_id,
+        Event.start_datetime >= cutoff_recent,
+        Event.start_datetime <= now,
+    ).all()
+    if len(last_week) >= 5:
+        completados = sum(1 for e in last_week if e.status == EventStatus.completed)
+        ratio = completados / len(last_week)
+        if ratio >= 0.7:
+            suggestions.append(
+                f"🎉 ¡Excelente racha! Completaste *{completados} de {len(last_week)}* "
+                f"eventos esta semana ({int(ratio * 100)}%)."
+            )
+
+    return suggestions
 
 
 # ---------------------------------------------------------------------------

@@ -69,7 +69,8 @@ class Event(Base):
     location         = Column(String,  nullable=True)     # Dirección o link de Zoom/Meet
     recurrence_rule  = Column(String,  nullable=True)     # "daily" | "weekly:MO,WE" | "monthly:15"
     attendees        = Column(Text,    nullable=True)     # CSV de nombres / emails
-    tags             = Column(String,  nullable=True)     # CSV: "trabajo,salud,personal"
+    tags             = Column(String,  nullable=True)     # CSV libre: "proyecto-alpha,urgente"
+    category         = Column(String,  default="otros")   # personal|trabajo|salud|finanzas|familia|social|otros
 
     reminder_sent    = Column(Boolean, default=False)
     last_reminded_at = Column(DateTime, nullable=True)   # Para follow-ups
@@ -95,17 +96,20 @@ def _migrate_event_columns():
     SQLAlchemy.create_all NO modifica tablas existentes; solo crea las que faltan.
     Este migrator es idempotente: usa ADD COLUMN IF NOT EXISTS (Postgres 9.6+).
     """
+    cols_to_add = [
+        ("location",        "VARCHAR"),
+        ("recurrence_rule", "VARCHAR"),
+        ("attendees",       "TEXT"),
+        ("tags",            "VARCHAR"),
+        ("category",        "VARCHAR DEFAULT 'otros'"),
+    ]
+
     if "sqlite" in DATABASE_URL:
         # SQLite: usar PRAGMA + ALTER TABLE manual (no soporta IF NOT EXISTS)
         with engine.begin() as conn:
             from sqlalchemy import text
             cols = {row[1] for row in conn.execute(text("PRAGMA table_info(events)")).fetchall()}
-            for col_name, col_def in [
-                ("location",        "VARCHAR"),
-                ("recurrence_rule", "VARCHAR"),
-                ("attendees",       "TEXT"),
-                ("tags",            "VARCHAR"),
-            ]:
+            for col_name, col_def in cols_to_add:
                 if col_name not in cols:
                     conn.execute(text(f"ALTER TABLE events ADD COLUMN {col_name} {col_def}"))
         return
@@ -113,12 +117,7 @@ def _migrate_event_columns():
     # Postgres
     with engine.begin() as conn:
         from sqlalchemy import text
-        for col_name, col_def in [
-            ("location",        "VARCHAR"),
-            ("recurrence_rule", "VARCHAR"),
-            ("attendees",       "TEXT"),
-            ("tags",            "VARCHAR"),
-        ]:
+        for col_name, col_def in cols_to_add:
             conn.execute(text(f"ALTER TABLE events ADD COLUMN IF NOT EXISTS {col_name} {col_def}"))
 
 
