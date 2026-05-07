@@ -50,5 +50,10 @@ notas          = st.Page("pages/notas.py",          title="Notas")
 completados    = st.Page("pages/completados.py",    title="Completados")
 conversaciones = st.Page("pages/conversaciones.py", title="Conversaciones")
 
-pg = st.navigation([home, agenda, notas, completados, conversaciones], position="sidebar")
+# Sidebar nativo OCULTO. Cada pagina renderiza su propio nav arriba
+# via theme.inject_nav() — funciona igual de bien en desktop y movil.
+pg = st.navigation(
+    [home, agenda, notas, completados, conversaciones],
+    position="hidden",
+)
 pg.run()

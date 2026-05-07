@@ -6,10 +6,11 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from db import SessionLocal, Note, User
-from theme import inject_css, COLORS, CATEGORY_COLORS, CATEGORY_LABELS
+from theme import inject_css, inject_nav, COLORS, CATEGORY_COLORS, CATEGORY_LABELS
 
 
 inject_css()
+inject_nav()
 telegram_id = st.session_state.get("telegram_id")
 if not telegram_id:
     st.error("Sesión expirada"); st.stop()

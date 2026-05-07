@@ -52,21 +52,43 @@ html, body, [class*="css"], .main {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Hide Streamlit chrome para look pro */
-#MainMenu, footer { visibility: hidden; height: 0; }
-
-/* Header transparente pero NO oculto, asi se mantiene el toggle del sidebar visible */
-header[data-testid="stHeader"] {
-    background: transparent !important;
-    box-shadow: none !important;
+/* Hide Streamlit chrome — incluye boton de GitHub source code en Cloud */
+#MainMenu,
+footer,
+header[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {
+    display: none !important;
 }
 
-/* Asegurar que el control de colapsar/expandir el sidebar siempre sea visible */
-[data-testid="collapsedControl"],
-button[kind="header"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+/* ─── Nav bar custom (reemplaza el sidebar nativo) ───────────── */
+.camsi-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 12px 0 18px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #E5E5E5;
+}
+/* Cada st.page_link se renderiza como un <a>, le damos forma de pill */
+.camsi-nav [data-testid="stPageLink"] a {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 999px !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #525252 !important;
+    text-decoration: none !important;
+    transition: all 150ms ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.camsi-nav [data-testid="stPageLink"] a:hover {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+    border-color: #0A0A0A !important;
 }
 
 /* Container principal: mucho whitespace */
@@ -423,73 +445,14 @@ hr {
         font-size: 15px;
     }
 
-    /* ─── Sidebar como DRAWER overlay ─────────────────────────────
-       Cubre el contenido cuando esta abierto. Aria-expanded=true
-       (default) lo muestra. False lo oculta totalmente.        */
-    [data-testid="stSidebar"] {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 82vw !important;
-        max-width: 320px !important;
-        height: 100vh !important;
-        height: 100dvh !important;
-        z-index: 999 !important;
-        background: #FFFFFF !important;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18) !important;
-        border-right: 1px solid #E5E5E5 !important;
-        transition: transform 250ms ease !important;
+    /* Nav bar mas compacto en movil */
+    .camsi-nav {
+        gap: 4px;
+        padding: 8px 0 14px;
     }
-
-    /* Sidebar expandido visible (default tras initial_sidebar_state=expanded) */
-    [data-testid="stSidebar"][aria-expanded="true"] {
-        transform: translateX(0) !important;
-    }
-    /* Sidebar colapsado: lo metemos fuera completamente */
-    [data-testid="stSidebar"][aria-expanded="false"] {
-        transform: translateX(-110%) !important;
-    }
-
-    /* ─── Toggle del sidebar (FORCED VISIBLE con multiples selectores)
-       Streamlit cambia el data-testid entre versiones; aplicamos a varios. */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    button[kind="header"],
-    button[kind="headerNoPadding"] {
-        position: fixed !important;
-        top: 0.6rem !important;
-        left: 0.6rem !important;
-        z-index: 1000 !important;
-        background: #0A0A0A !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 0 !important;
-        width: 48px !important;
-        height: 48px !important;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        align-items: center !important;
-        justify-content: center !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
-    }
-
-    /* El icono interior del toggle blanco */
-    [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapsedControl"] svg,
-    button[kind="header"] svg {
-        color: #FFFFFF !important;
-        fill: #FFFFFF !important;
-        stroke: #FFFFFF !important;
-        width: 22px !important;
-        height: 22px !important;
-    }
-
-    /* Espaciado superior en el contenido principal para que el toggle no tape */
-    section[data-testid="stMain"] .block-container {
-        padding-top: 4rem !important;
+    .camsi-nav [data-testid="stPageLink"] a {
+        padding: 7px 13px !important;
+        font-size: 13px !important;
     }
 
     /* Forms y selects con altura adecuada para touch */
@@ -540,3 +503,20 @@ def inject_css():
     """Llama una sola vez al inicio de cada página."""
     import streamlit as st
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+
+def inject_nav():
+    """
+    Renderiza el nav bar custom (reemplazo del sidebar nativo).
+    Usar en cada pagina justo despues de inject_css().
+    Aprovecha st.page_link, que mantiene el routing nativo de Streamlit.
+    """
+    import streamlit as st
+    st.markdown('<div class="camsi-nav">', unsafe_allow_html=True)
+    cols = st.columns(5, gap="small")
+    with cols[0]: st.page_link("pages/home.py",           label="Inicio")
+    with cols[1]: st.page_link("pages/agenda.py",         label="Agenda")
+    with cols[2]: st.page_link("pages/notas.py",          label="Notas")
+    with cols[3]: st.page_link("pages/completados.py",    label="Hechos")
+    with cols[4]: st.page_link("pages/conversaciones.py", label="Chat")
+    st.markdown('</div>', unsafe_allow_html=True)
