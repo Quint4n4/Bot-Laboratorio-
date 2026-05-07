@@ -32,10 +32,13 @@ Muestra los eventos pendientes que tienes para **hoy**. Cada evento aparece como
 Lista compacta de tus eventos pendientes de los **proximos 7 dias**, ordenados por fecha. Pensado para ver de un vistazo lo que viene.
 
 ### `/notas`
-Muestra tus **notas guardadas** (las ultimas 10). Cada nota tiene tres botones:
+Muestra tus **notas guardadas** (las ultimas 10). Cada nota tiene dos botones:
 - ✏️ Editar — modo conversacional para cambiar titulo, contenido o categoria
 - ⏰ Recordar — programa un recordatorio sobre la nota a la hora que digas
-- 🗑️ Borrar — elimina la nota
+
+> Las notas **no tienen boton de borrar en Telegram** (para evitar borrados
+> accidentales). Para eliminar una nota: dile a CAMSI por voz o texto
+> _"borra la nota del wifi"_, o entra al dashboard web y borra desde alli.
 
 ### `/voz`
 Activa o desactiva las **respuestas de voz**. Cuando esta activado, CAMSI te contesta con un audio (mas un boton "Ver texto" para leer la transcripcion). Cuando esta desactivado, solo responde con texto.

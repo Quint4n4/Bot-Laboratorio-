@@ -274,9 +274,13 @@ async def cmd_notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     db = SessionLocal()
     try:
+        from sqlalchemy import or_
         notes = (
             db.query(Note)
-            .filter(Note.user_telegram_id == user_id, Note.archived == False)
+            .filter(
+                Note.user_telegram_id == user_id,
+                or_(Note.archived == False, Note.archived.is_(None)),
+            )
             .order_by(Note.created_at.desc())
             .limit(10)
             .all()
@@ -314,10 +318,12 @@ async def cmd_notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if n.tags:
             text += f"\n\n🏷️ _{n.tags}_"
 
+        # Sin boton de Borrar en Telegram para evitar borrados accidentales.
+        # Para eliminar una nota: dilo por voz/texto ("borra mi nota X") o
+        # usa el boton de borrar en el dashboard web.
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("✏️ Editar",   callback_data=f"editnote:{n.id}"),
             InlineKeyboardButton("⏰ Recordar", callback_data=f"remindnote:{n.id}"),
-            InlineKeyboardButton("🗑️ Borrar",  callback_data=f"deletenote:{n.id}"),
         ]])
         await update.effective_message.reply_text(
             text, parse_mode="Markdown", reply_markup=keyboard,

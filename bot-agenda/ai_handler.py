@@ -541,11 +541,14 @@ def _exec_create_note(args: dict, user_id: str, db: Session) -> dict:
             content=args["content"].strip(),
             category=args.get("category", "otros"),
             tags=args.get("tags") or None,
+            archived=False,           # explicito: NO quedan archivadas al crear
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
         )
         db.add(note)
         db.commit()
         db.refresh(note)
-        logger.info(f"CREATE_NOTE OK id={note.id} title='{note.title}'")
+        logger.info(f"CREATE_NOTE OK id={note.id} title='{note.title}' user={user_id}")
         return {
             "ok": True,
             "note_id": note.id,
@@ -559,9 +562,10 @@ def _exec_create_note(args: dict, user_id: str, db: Session) -> dict:
 
 def _exec_list_notes(args: dict, user_id: str, db: Session) -> dict:
     """Lista las notas del usuario, filtrables por categoria."""
+    from sqlalchemy import or_
     q = db.query(Note).filter(
         Note.user_telegram_id == user_id,
-        Note.archived == False,
+        or_(Note.archived == False, Note.archived.is_(None)),
     )
     if args.get("category"):
         q = q.filter(Note.category == args["category"])
@@ -594,7 +598,7 @@ def _exec_search_notes(args: dict, user_id: str, db: Session) -> dict:
         db.query(Note)
         .filter(
             Note.user_telegram_id == user_id,
-            Note.archived == False,
+            or_(Note.archived == False, Note.archived.is_(None)),
             or_(
                 func.lower(Note.title).like(pattern.lower()),
                 func.lower(Note.content).like(pattern.lower()),
@@ -770,28 +774,69 @@ NOTAS vs EVENTOS — diferencia clave:
   No tiene fecha de aviso. Ejemplos: "el wifi es 1234", "el correo de Juan es...",
   "anota que la presentacion es el martes", "guarda que Pedro me debe 500".
 
-REGLA DE DESAMBIGUACION (MUY IMPORTANTE):
-Si el usuario dice "recuerdame que [INFORMACION]" SIN especificar tiempo
-explicito (ej. "recuerdame que el wifi es 1234"), NO llames create_event ni
-create_note todavia. En vez de eso, RESPONDE EN TEXTO preguntando:
+═══════════════════════════════════════════════════════════════════
+REGLAS DE DECISION — sigue este orden ESTRICTAMENTE:
+═══════════════════════════════════════════════════════════════════
 
-  "¿Quieres que lo guarde como nota o prefieres que te lo recuerde a una hora
-  especifica? Para nota responde 'nota'. Para recordatorio dime cuando
-  ('en 1 hora', 'a las 5 PM', 'manana')."
+PASO 1: ¿El usuario YA dijo explicitamente que tipo quiere?
 
-Cuando el usuario responda en el siguiente mensaje (vas a ver el contenido
-original en el historial), llamas la tool correcta:
-- Si dice "nota" o "guardar" → create_note con el contenido original
-- Si da una hora → create_event con start_datetime calculado y title corto
-  basado en el contenido (NO incluyas la palabra "recuerdame" en el title)
+  Si menciona NOTA explicitamente → llama create_note DIRECTO. Sin preguntar.
+    Triggers: "anota", "anotame", "guarda", "guardame", "haz una nota",
+    "hazme una nota", "pon una nota", "agrega a mis notas", "tengo una nota",
+    "guarda como nota", "guarda esto", "ten esto guardado", "apunta", "memoriza".
+    Ejemplos:
+    - "Anota que el wifi es 1234" → create_note
+    - "Hazme una nota: Pedro debe $500" → create_note
+    - "Guarda esto como nota" → create_note
 
-CASOS QUE NO REQUIEREN PREGUNTAR (llamas la tool directo):
-- "anota que..." / "guarda que..." / "tengo una nota: ..." → create_note directo
-- "agrega a mis notas..." → create_note directo
-- "recuerdame en X minutos..." → create_event directo (tiempo explicito)
-- "recuerdame manana a las Y..." → create_event directo (tiempo explicito)
-- "recuerdame [accion verbal]" sin info y sin tiempo (ej "recuerdame estirarme")
-   → preguntar como en la regla de desambiguacion
+  Si menciona RECORDATORIO/CITA explicitamente → llama create_event.
+    Triggers: "recuerdame", "ponme un recordatorio", "haz un recordatorio",
+    "hazme un recordatorio", "pon un recordatorio", "agendame", "programa",
+    "alertame", "avisame".
+
+    Si te da la hora → create_event DIRECTO.
+    Si NO te da la hora → pregunta SOLO la hora (no le preguntes "nota o
+    recordatorio" porque ya eligio):
+    "¿A que hora te recuerdo? Ej: 'en 1 hora', 'a las 5 PM', 'manana 10 AM'."
+
+    Ejemplos:
+    - "Recuerdame en 10 min tomar agua" → create_event directo
+    - "Hazme un recordatorio para tomar agua" → preguntar SOLO la hora
+    - "Agendame una cita manana a las 3 PM" → create_event directo
+    - "Pon un recordatorio para llamar a Juan" → preguntar SOLO la hora
+
+PASO 2: Si NO eligio tipo explicito, ¿hay tiempo y/o accion clara?
+
+  Si dice "recuerdame [accion] [tiempo]" como "recuerdame comer a las 8 PM"
+  → create_event DIRECTO (tiempo explicito).
+
+  Si dice "recuerdame [accion]" sin tiempo, como "recuerdame estirarme"
+  → es claramente una accion programada pendiente de hora. Trata como
+  recordatorio: pregunta SOLO la hora.
+
+  Si dice "recuerdame que [INFORMACION ESTATICA]" sin tiempo,
+  como "recuerdame que el wifi es 1234" o "recuerdame que Pedro me debe 500"
+  → AHI SI hay ambiguedad real (puede ser nota o recordatorio).
+  Pregunta UNA SOLA VEZ:
+  "¿Lo guardo como nota o prefieres que te lo recuerde a una hora especifica?
+  Responde 'nota' o dime la hora."
+
+═══════════════════════════════════════════════════════════════════
+REGLA DE FECHA POR DEFECTO (cuando el usuario da HORA pero no DIA):
+═══════════════════════════════════════════════════════════════════
+
+Asume que es HOY si la hora todavia NO ha pasado en el dia actual.
+Si la hora ya paso hoy, NO la pongas en el pasado: asume manana
+silenciosamente y mencionalo al confirmar para que el usuario corrija.
+
+Ejemplos (asumiendo que ahora son las 1:30 PM):
+- "recuerdame comer a las 8 PM" → HOY 8 PM (las 8 PM aun no han pasado)
+- "recuerdame comer a las 9 AM"  → 9 AM ya paso → MANANA 9 AM (avisa "Te lo
+  agende para manana porque las 9 AM de hoy ya pasaron, dime si querias otra cosa")
+- "recuerdame comer a las 12" → 12 PM = mediodia ya paso → MANANA 12 PM
+  (avisa al usuario)
+
+NUNCA agendes a una hora que ya paso en el mismo dia.
 
 CONSULTAR / BUSCAR NOTAS:
 - "¿que notas tengo?" → list_notes

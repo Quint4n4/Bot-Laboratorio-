@@ -117,13 +117,21 @@ def _editar_nota_dialog(note_id: int):
 
 
 # ── Datos ──────────────────────────────────────────────────────────
+# Nota: filtramos archived != True (en lugar de archived == False) para
+# tolerar registros con archived = NULL (notas guardadas antes de que
+# tuvieramos el default explicito).
+from sqlalchemy import or_
+
 with SessionLocal() as db:
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     tz = ZoneInfo(user.timezone if user and user.timezone else "America/Mexico_City")
     notas_all = (
         db.query(Note)
-        .filter(Note.user_telegram_id == telegram_id, Note.archived == False)
-        .order_by(Note.created_at.desc())
+        .filter(
+            Note.user_telegram_id == telegram_id,
+            or_(Note.archived == False, Note.archived.is_(None)),
+        )
+        .order_by(Note.created_at.desc().nullslast())
         .all()
     )
 
