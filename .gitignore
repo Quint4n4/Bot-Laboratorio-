@@ -38,3 +38,6 @@ docker-compose.yml
 .idea/
 *.swp
 *.swo
+
+# Claude Code / Cowork local files
+.claude/
