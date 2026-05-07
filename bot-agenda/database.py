@@ -80,7 +80,7 @@ class Event(Base):
 
 
 class Message(Base):
-    """Historial conversacional por usuario para memoria multi-turno de ARIA."""
+    """Historial conversacional por usuario para memoria multi-turno de CAMSI."""
     __tablename__ = "messages"
 
     id               = Column(Integer, primary_key=True, index=True)

@@ -1,6 +1,6 @@
-# ARIA Dashboard
+# CAMSI Dashboard
 
-Dashboard web minimalista para el asistente personal ARIA (Telegram bot).
+Dashboard web minimalista para el asistente personal CAMSI (Telegram bot).
 Muestra agenda, completados, conversaciones y sugerencias proactivas.
 
 ## Stack

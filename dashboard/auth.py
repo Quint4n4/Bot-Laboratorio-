@@ -1,6 +1,6 @@
 """
 auth.py — Validación de tokens HMAC para magic link
-El bot ARIA genera tokens con make_token(); el dashboard los valida con verify_token().
+El bot CAMSI genera tokens con make_token(); el dashboard los valida con verify_token().
 """
 import hmac
 import hashlib

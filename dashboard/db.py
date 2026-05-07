@@ -1,5 +1,5 @@
 """
-db.py — Conexión a Postgres compartida con el bot ARIA.
+db.py — Conexión a Postgres compartida con el bot CAMSI.
 Usa los mismos modelos para que dashboard y bot estén sincronizados.
 """
 import os

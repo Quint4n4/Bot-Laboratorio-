@@ -113,7 +113,7 @@ async def check_due_reminders():
                 speech_text = f"Recordatorio: {event.title}."
                 audio_path = await text_to_speech(
                     speech_text,
-                    voice=user.voice_persona or "aria",
+                    voice=user.voice_persona or "nova",
                 )
                 with open(audio_path, "rb") as f:
                     await _app.bot.send_voice(
@@ -270,7 +270,7 @@ async def morning_briefing():
                     speech = f"Buenos días. Tienes {len(events)} evento{'s' if len(events) > 1 else ''} para hoy. El primero es {events[0].title}. Te envié la agenda completa en el documento adjunto."
                 else:
                     speech = "Buenos días. No tienes eventos programados para hoy. ¡Buen día libre!"
-                audio_path = await text_to_speech(speech, voice=user.voice_persona or "aria")
+                audio_path = await text_to_speech(speech, voice=user.voice_persona or "nova")
                 with open(audio_path, "rb") as f:
                     await _app.bot.send_voice(
                         chat_id=user.telegram_id,
@@ -353,7 +353,7 @@ async def evening_wrapup():
             if user.voice_replies:
                 from voice_handler import text_to_speech
                 speech = f"Resumen del día. Completaste {len(completed)} tarea{'s' if len(completed) != 1 else ''}. Quedaron {len(pending)} pendiente{'s' if len(pending) != 1 else ''}. ¡Que descanses!"
-                audio_path = await text_to_speech(speech, voice=user.voice_persona or "aria")
+                audio_path = await text_to_speech(speech, voice=user.voice_persona or "nova")
                 with open(audio_path, "rb") as f:
                     await _app.bot.send_voice(
                         chat_id=user.telegram_id,

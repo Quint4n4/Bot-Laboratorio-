@@ -1,4 +1,4 @@
-# Comandos del Bot ARIA — Asistente Personal
+# Comandos del Bot CAMSI — Asistente Personal
 
 Guia rapida para explicar que hace cada comando del bot de Telegram.
 Ademas de los comandos con `/`, el bot acepta **mensajes de texto y notas de voz** en lenguaje natural.
@@ -8,7 +8,7 @@ Ademas de los comandos con `/`, el bot acepta **mensajes de texto y notas de voz
 ## Comandos disponibles
 
 ### `/start`
-Inicia la conversacion con ARIA. Crea tu perfil de usuario si es la primera vez y te da una bienvenida con ejemplos de uso. Es el unico comando obligatorio para empezar.
+Inicia la conversacion con CAMSI. Crea tu perfil de usuario si es la primera vez y te da una bienvenida con ejemplos de uso. Es el unico comando obligatorio para empezar.
 
 ### `/ayuda`
 Muestra el listado completo de comandos disponibles con un ejemplo rapido. Util como referencia rapida.
@@ -26,7 +26,7 @@ Muestra los eventos pendientes que tienes para **hoy**. Cada evento aparece como
 - ✅ Confirma la ocurrencia actual SIN matar la serie (sigue recordandote en el siguiente ciclo)
 - ⏰+15 Posponer 15 minutos
 - 📝 Editar
-- 🛑 Serie — detiene la serie completa: ARIA deja de recordarte para siempre
+- 🛑 Serie — detiene la serie completa: CAMSI deja de recordarte para siempre
 
 ### `/semana`
 Lista compacta de tus eventos pendientes de los **proximos 7 dias**, ordenados por fecha. Pensado para ver de un vistazo lo que viene.
@@ -40,13 +40,13 @@ Genera un reporte de productividad en PDF. Te pregunta el periodo y eliges entre
 El PDF incluye totales, eventos completados y pendientes del periodo elegido.
 
 ### `/voz`
-Activa o desactiva las **respuestas de voz**. Cuando esta activado, ARIA te contesta con un audio (mas un boton "Ver texto" para leer la transcripcion). Cuando esta desactivado, solo responde con texto.
+Activa o desactiva las **respuestas de voz**. Cuando esta activado, CAMSI te contesta con un audio (mas un boton "Ver texto" para leer la transcripcion). Cuando esta desactivado, solo responde con texto.
 
 ### `/perfil`
-Muestra tu configuracion actual (zona horaria, voz elegida, hora del briefing matutino y wrap-up nocturno) y te permite cambiar la **voz de ARIA**. Hay 6 voces disponibles: Nova, Shimmer, Alloy, Echo, Fable y Onyx.
+Muestra tu configuracion actual (zona horaria, voz elegida, hora del briefing matutino y wrap-up nocturno) y te permite cambiar la **voz de CAMSI**. Hay 6 voces disponibles: Nova, Shimmer, Alloy, Echo, Fable y Onyx.
 
 ### `/sugerencias`
-ARIA analiza tu actividad de los ultimos 90 dias y te sugiere mejoras proactivas, por ejemplo:
+CAMSI analiza tu actividad de los ultimos 90 dias y te sugiere mejoras proactivas, por ejemplo:
 - Eventos que has creado >=3 veces y podrian ser recurrentes
 - Tareas pendientes desde hace mas de una semana
 - Rachas de productividad (>=70% completado en la semana)
@@ -55,7 +55,7 @@ ARIA analiza tu actividad de los ultimos 90 dias y te sugiere mejoras proactivas
 Genera un enlace **firmado y unico para ti** al dashboard web (Streamlit). El link expira en 24 horas; si caduca, basta con pedir uno nuevo. En el dashboard puedes ver KPIs, agenda de hoy, completados, conversaciones y crear eventos desde el navegador.
 
 ### `/olvidar`
-Borra el **historial conversacional** que ARIA recuerda de ti (los ultimos mensajes que se usan como contexto para las respuestas). NO borra tus eventos ni tu agenda — solo la memoria de chat. Util si quieres empezar de cero o si ARIA esta interpretando algo raro por contexto viejo.
+Borra el **historial conversacional** que CAMSI recuerda de ti (los ultimos mensajes que se usan como contexto para las respuestas). NO borra tus eventos ni tu agenda — solo la memoria de chat. Util si quieres empezar de cero o si CAMSI esta interpretando algo raro por contexto viejo.
 
 ### `/cancelar`
 Sale del **modo edicion** de un evento. Si pulsaste "📝 Editar" en algun evento de tu agenda, este comando aborta el flujo sin hacer cambios.
@@ -64,7 +64,7 @@ Sale del **modo edicion** de un evento. Si pulsaste "📝 Editar" en algun event
 
 ## Sin comando: mensajes en lenguaje natural
 
-ARIA entiende texto libre y notas de voz. Puedes decirle directamente lo que quieres y ella usa IA para interpretarlo y ejecutar la accion correcta.
+CAMSI entiende texto libre y notas de voz. Puedes decirle directamente lo que quieres y ella usa IA para interpretarlo y ejecutar la accion correcta.
 
 ### Ejemplos de uso libre
 
@@ -81,11 +81,11 @@ ARIA entiende texto libre y notas de voz. Puedes decirle directamente lo que qui
 
 ### Notas de voz
 
-Si mandas un audio en lugar de texto, ARIA lo transcribe automaticamente con Whisper y lo procesa igual. Util cuando estas en movimiento.
+Si mandas un audio en lugar de texto, CAMSI lo transcribe automaticamente con Whisper y lo procesa igual. Util cuando estas en movimiento.
 
 ### Modo edicion
 
-Cuando pulsas "📝 Editar" en un evento de tu `/agenda`, ARIA entra en modo edicion. En el siguiente mensaje, le dices en lenguaje natural que cambiar:
+Cuando pulsas "📝 Editar" en un evento de tu `/agenda`, CAMSI entra en modo edicion. En el siguiente mensaje, le dices en lenguaje natural que cambiar:
 - *"cambia la hora a las 11 AM"*
 - *"reagendalo para el viernes"*
 - *"cambia el titulo a Junta semanal"*
@@ -97,10 +97,10 @@ Para salir sin cambios, escribe `/cancelar`.
 
 ## Funcionalidades automaticas (sin comando)
 
-ARIA tambien hace cosas por su cuenta sin que tengas que pedirselas:
+CAMSI tambien hace cosas por su cuenta sin que tengas que pedirselas:
 
 - **Recordatorios automaticos**: cuando llega la hora de un evento, te avisa. Los recordatorios traen botones para confirmar (✅), posponer 15 min (⏰) y, segun el tipo de evento, cancelar (❌) o detener la serie (🛑).
 - **Follow-ups**: si no atiendes un recordatorio puntual, insiste cada minuto con mensajes diferentes (hasta 6 veces). Los eventos recurrentes no generan follow-ups: en su lugar, simplemente vuelven a recordarte en la siguiente vuelta de la serie.
 - **Briefing matutino**: cada dia a la hora configurada en `/perfil` te manda un PDF con la agenda del dia y un saludo en audio.
 - **Wrap-up nocturno**: a la hora configurada te manda un resumen del dia con completados y pendientes.
-- **Eventos recurrentes**: si un evento tiene regla de recurrencia (`daily`, `weekly:MO`, `every:20m`, etc.) ARIA lo reprograma automaticamente cada vez que se dispara.
+- **Eventos recurrentes**: si un evento tiene regla de recurrencia (`daily`, `weekly:MO`, `every:20m`, etc.) CAMSI lo reprograma automaticamente cada vez que se dispara.

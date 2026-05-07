@@ -1,6 +1,6 @@
 """
 main.py - Punto de entrada del Bot de Agenda en Telegram
-Agenda Bot - Asistente Personal (ARIA)
+Agenda Bot - Asistente Personal (CAMSI)
 """
 import hashlib
 import hmac
@@ -75,7 +75,7 @@ async def send_text_and_voice(update: Update, user: User, text: str, parse_mode:
 
     audio_path = await text_to_speech(
         text.replace("*", "").replace("_", ""),
-        voice=user.voice_persona or "aria",
+        voice=user.voice_persona or "nova",
     )
 
     # Botón inline para revelar el texto on-demand
@@ -102,7 +102,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.close()
 
     welcome = (
-        f"👋 ¡Hola, *{name}*! Soy *ARIA*, tu asistente personal de agenda.\n\n"
+        f"👋 ¡Hola, *{name}*! Soy *CAMSI*, tu asistente personal de agenda.\n\n"
         "Puedo ayudarte a:\n"
         "• ⏰ Crear recordatorios y citas\n"
         "• 📅 Consultar tu agenda del día\n"
@@ -422,7 +422,7 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• Briefing matutino: `{user.morning_hour:02d}:00`\n"
         f"• Wrap-up nocturno: `{user.evening_hour:02d}:00`\n"
         f"• Respuestas de voz: `{'Activadas ✅' if user.voice_replies else 'Desactivadas ❌'}`\n\n"
-        "🎙️ *Elige la voz de ARIA:*"
+        "🎙️ *Elige la voz de CAMSI:*"
     )
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -690,11 +690,11 @@ def main():
 
     async def on_startup(application):
         start_scheduler(application)
-        logger.info("🚀 ARIA Bot iniciado. Esperando mensajes...")
+        logger.info("🚀 CAMSI Bot iniciado. Esperando mensajes...")
 
     app.post_init = on_startup
 
-    logger.info("🚀 Arrancando ARIA Bot...")
+    logger.info("🚀 Arrancando CAMSI Bot...")
     app.run_polling(drop_pending_updates=True)
 
 

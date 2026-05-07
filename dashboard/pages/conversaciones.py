@@ -1,4 +1,4 @@
-"""Conversaciones — historial de chat con ARIA con búsqueda."""
+"""Conversaciones — historial de chat con CAMSI con búsqueda."""
 from datetime import timezone
 from zoneinfo import ZoneInfo
 from html import escape
@@ -31,7 +31,7 @@ with SessionLocal() as db:
 # ── Render ─────────────────────────────────────────────────────────
 st.markdown("# Conversaciones")
 st.markdown(
-    f'<p class="subhead">Últimos {len(todos)} mensajes con ARIA</p>',
+    f'<p class="subhead">Últimos {len(todos)} mensajes con CAMSI</p>',
     unsafe_allow_html=True,
 )
 

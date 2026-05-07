@@ -1,5 +1,5 @@
 """
-ARIA Dashboard — entry point.
+CAMSI Dashboard — entry point.
 Stack: Streamlit + SQLAlchemy + Plotly.
 Auth: HMAC magic link generado por el bot.
 """
@@ -10,7 +10,7 @@ from theme import inject_css
 
 
 st.set_page_config(
-    page_title="ARIA — Dashboard",
+    page_title="CAMSI — Dashboard",
     page_icon="●",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -35,7 +35,7 @@ if not telegram_id:
     st.markdown("# Sesión no válida")
     st.markdown(
         '<p class="subhead">'
-        'El enlace expiró o no es válido. Pídele a ARIA un enlace nuevo '
+        'El enlace expiró o no es válido. Pídele a CAMSI un enlace nuevo '
         'escribiendo <code>/dashboard</code> en Telegram.'
         '</p>',
         unsafe_allow_html=True,

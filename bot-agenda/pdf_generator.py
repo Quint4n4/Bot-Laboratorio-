@@ -71,7 +71,7 @@ class AgendaPDF(FPDF):
         self.set_font("Arial", "B", 13)
         self.set_text_color(*WHITE)
         self.set_y(5)
-        self.cell(0, 10, "ARIA  \u2014  Asistente de Agenda Personal", align="C")
+        self.cell(0, 10, "CAMSI  \u2014  Asistente de Agenda Personal", align="C")
         self.ln(22)
 
         # Titulo
@@ -92,7 +92,7 @@ class AgendaPDF(FPDF):
         self.set_text_color(*TEXT_MUTED)
         self.cell(
             0, 8,
-            f"Generado por ARIA  \u2014  {datetime.now().strftime('%d/%m/%Y  %I:%M %p')}  \u2014  P\u00e1gina {self.page_no()}",
+            f"Generado por CAMSI  \u2014  {datetime.now().strftime('%d/%m/%Y  %I:%M %p')}  \u2014  P\u00e1gina {self.page_no()}",
             align="C",
         )
 

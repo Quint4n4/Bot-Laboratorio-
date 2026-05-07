@@ -455,7 +455,7 @@ def dispatch_tool(name: str, args: dict, user_id: str, db: Session, tz: ZoneInfo
 # Va al inicio del prompt para que OpenAI lo cachee. La fecha dinámica
 # se inserta como mensaje aparte al final (no cacheable, pequeño).
 # ---------------------------------------------------------------------------
-_STATIC_SYSTEM_PROMPT = """Eres ARIA, asistente personal de agenda. Eres amable, directa y eficiente.
+_STATIC_SYSTEM_PROMPT = """Eres CAMSI, asistente personal de agenda. Eres amable, directa y eficiente.
 
 INSTRUCCION CRITICA: Para cualquier accion sobre la agenda (crear cita, recordatorio o tarea, consultar eventos, cancelar, reagendar, completar, generar reporte), DEBES usar SIEMPRE las herramientas disponibles. NUNCA respondas como si hubieras realizado una accion sin haber llamado la herramienta correspondiente.
 
@@ -625,7 +625,7 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
     now     = datetime.now(tz)
     now_str = now.strftime("%A, %d/%m/%Y %I:%M %p")
 
-    print(f"[ARIA] process_message invocado: '{user_text[:60]}' | user={user_id} | tz={timezone}")
+    print(f"[CAMSI] process_message invocado: '{user_text[:60]}' | user={user_id} | tz={timezone}")
 
     # Mensaje dinámico pequeño con fecha/hora — va al final para no romper cache
     dynamic_context = f"FECHA Y HORA ACTUAL: {now_str} (zona horaria: {timezone}). " \
@@ -634,7 +634,7 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
 
     # Cargar historial conversacional
     history = _load_history(user_id, db)
-    print(f"[ARIA] historial cargado: {len(history)} mensajes")
+    print(f"[CAMSI] historial cargado: {len(history)} mensajes")
 
     # Estructura: system estático (cacheable) + historial + dynamic + nuevo user msg
     messages = [
@@ -661,14 +661,14 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
             tool_choice="auto",
         )
         msg = response.choices[0].message
-        print(f"[ARIA] iter={iteration} tool_calls={bool(msg.tool_calls)} "
+        print(f"[CAMSI] iter={iteration} tool_calls={bool(msg.tool_calls)} "
               f"content='{str(msg.content)[:60] if msg.content else None}'")
 
         # Log de cache hit (OpenAI lo expone en usage.prompt_tokens_details.cached_tokens)
         try:
             cached = response.usage.prompt_tokens_details.cached_tokens
             if cached:
-                print(f"[ARIA] cache hit: {cached} tokens cacheados")
+                print(f"[CAMSI] cache hit: {cached} tokens cacheados")
         except Exception:
             pass
 
@@ -681,9 +681,9 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
         for tool_call in msg.tool_calls:
             name   = tool_call.function.name
             args   = json.loads(tool_call.function.arguments)
-            print(f"[ARIA] ejecutando tool: {name} | args={args}")
+            print(f"[CAMSI] ejecutando tool: {name} | args={args}")
             result = dispatch_tool(name, args, user_id, db, tz)
-            print(f"[ARIA] resultado {name}: {result[:120]}")
+            print(f"[CAMSI] resultado {name}: {result[:120]}")
             messages.append({
                 "role":         "tool",
                 "tool_call_id": tool_call.id,
@@ -693,7 +693,7 @@ def process_message(user_text: str, user_id: str, db: Session, timezone: str = "
         # Demasiadas iteraciones
         final_text = "Lo siento, tuve un problema procesando tu solicitud. Intenta de nuevo."
 
-    # Guardar respuesta del asistente para que ARIA la "recuerde" en el siguiente turno
+    # Guardar respuesta del asistente para que CAMSI la "recuerde" en el siguiente turno
     if final_text:
         _save_message(user_id, "assistant", final_text, db)
 

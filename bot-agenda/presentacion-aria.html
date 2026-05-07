@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conoce a CAMSI — Tu asistente personal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --ink: #0A0A0A;
+    --ink-soft: #525252;
+    --ink-muted: #A3A3A3;
+    --border: #E5E5E5;
+    --accent: #3B82F6;
+    --tg-bg: #E7EBF0;
+    --tg-bubble-in: #FFFFFF;
+    --tg-bubble-out: #EFFDDE;
+    --tg-blue: #5288C1;
+}
+html, body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+}
+
+/* ── Layout principal ───────────────────────────────── */
+.deck {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+}
+.slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 6vw;
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 400ms ease, transform 400ms ease;
+    pointer-events: none;
+    overflow-y: auto;
+}
+.slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+.slide.prev {
+    transform: translateX(-40px);
+}
+
+/* ── Tipografía ──────────────────────────────────────── */
+h1 {
+    font-size: clamp(2.2rem, 5vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+h2 {
+    font-size: clamp(1.6rem, 3vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    line-height: 1.15;
+}
+h3 {
+    font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+    color: var(--ink);
+}
+.subtitle {
+    font-size: clamp(1rem, 1.5vw, 1.3rem);
+    color: var(--ink-soft);
+    text-align: center;
+    max-width: 680px;
+    line-height: 1.5;
+    margin-bottom: 2rem;
+    font-weight: 400;
+}
+.eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+}
+.kicker {
+    font-size: 1rem;
+    color: var(--ink-soft);
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+code, .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+    background: #F4F4F5;
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: var(--ink);
+}
+
+/* ── Hero (slide 1) ──────────────────────────────────── */
+.hero-emoji {
+    font-size: clamp(4rem, 10vw, 8rem);
+    margin-bottom: 1.5rem;
+    animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+.hint {
+    position: absolute;
+    bottom: 7vh;
+    color: var(--ink-muted);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--surface);
+}
+
+/* ── Cards ──────────────────────────────────────────── */
+.card-grid {
+    display: grid;
+    gap: 1rem;
+    width: 100%;
+    max-width: 1100px;
+}
+.card-grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.card-grid.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem 1.6rem;
+    transition: border-color 200ms ease, transform 200ms ease;
+}
+.card:hover {
+    border-color: var(--ink);
+    transform: translateY(-2px);
+}
+.card .icon {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+}
+.card p {
+    color: var(--ink-soft);
+    line-height: 1.55;
+    font-size: 0.95rem;
+}
+
+/* ── Telegram mockup ────────────────────────────────── */
+.tg-window {
+    width: 100%;
+    max-width: 420px;
+    background: var(--tg-bg);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+}
+.tg-header {
+    background: linear-gradient(180deg, #5288C1 0%, #4878B0 100%);
+    color: white;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tg-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: white;
+    font-size: 1rem;
+}
+.tg-name {
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.1;
+}
+.tg-status {
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+.tg-body {
+    padding: 14px 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(180,200,220,0.2) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(180,200,220,0.2) 0%, transparent 50%);
+    min-height: 280px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.bubble {
+    max-width: 78%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    animation: bubble-in 0.3s ease forwards;
+}
+@keyframes bubble-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.bubble.in {
+    background: var(--tg-bubble-in);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+.bubble.out {
+    background: var(--tg-bubble-out);
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+.bubble.system {
+    align-self: center;
+    background: rgba(0,0,0,0.06);
+    color: var(--ink-soft);
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 10px;
+}
+.bubble strong { font-weight: 700; }
+.bubble em { font-style: italic; color: var(--ink-soft); }
+.bubble .cmd {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    font-weight: 500;
+}
+.bubble .voice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+.voice-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--tg-blue);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.voice-wave {
+    flex: 1;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.voice-wave span {
+    width: 2px;
+    background: var(--tg-blue);
+    border-radius: 2px;
+}
+.tg-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.tg-btn {
+    background: white;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: default;
+    flex: 1;
+    text-align: center;
+    min-width: 0;
+}
+.tg-btn.danger { color: #DC2626; }
+.tg-btn.warn { color: #D97706; }
+
+/* ── Layout chat + texto ────────────────────────────── */
+.split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4vw;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px;
+}
+.split.flip {
+    grid-template-columns: 1fr 1fr;
+}
+.split-text h2 {
+    text-align: left;
+    margin-bottom: 1.2rem;
+}
+.split-text p {
+    color: var(--ink-soft);
+    line-height: 1.6;
+    font-size: 1.05rem;
+    margin-bottom: 1rem;
+}
+.split-text ul {
+    list-style: none;
+    margin-top: 1rem;
+}
+.split-text li {
+    padding: 0.6rem 0;
+    color: var(--ink);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 0.95rem;
+}
+.split-text li:last-child { border-bottom: none; }
+.split-text li .dot {
+    color: var(--accent);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ── Lista de comandos ──────────────────────────────── */
+.cmd-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.7rem;
+    width: 100%;
+    max-width: 1100px;
+}
+.cmd-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    transition: border-color 150ms ease;
+}
+.cmd-item:hover { border-color: var(--ink); }
+.cmd-item .cmd-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+    min-width: 105px;
+    flex-shrink: 0;
+}
+.cmd-item .cmd-desc {
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+/* ── Navegación ──────────────────────────────────────── */
+.nav {
+    position: fixed;
+    bottom: 2.5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+}
+.nav-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--ink);
+    transition: all 200ms ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.nav-btn:hover:not(:disabled) {
+    background: var(--ink);
+    color: white;
+    transform: scale(1.05);
+}
+.nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+.dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ink-muted);
+    cursor: pointer;
+    transition: all 200ms ease;
+    opacity: 0.4;
+}
+.dot.active {
+    background: var(--accent);
+    opacity: 1;
+    width: 28px;
+    border-radius: 4px;
+}
+.counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    min-width: 50px;
+    text-align: center;
+}
+
+/* ── Highlight box ───────────────────────────────────── */
+.highlight {
+    background: linear-gradient(135deg, #EBF4FF 0%, #E0E7FF 100%);
+    border: 1px solid #C7D7FF;
+    border-radius: 14px;
+    padding: 1.5rem 1.8rem;
+    max-width: 760px;
+    margin: 1.5rem auto 0;
+    color: var(--ink);
+    line-height: 1.6;
+}
+.highlight strong { color: var(--accent); }
+
+/* ── Auto features ───────────────────────────────────── */
+.feature-row {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    padding: 1.2rem 0;
+    border-bottom: 1px solid var(--border);
+    width: 100%;
+    max-width: 800px;
+}
+.feature-row:last-child { border-bottom: none; }
+.feature-icon {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+    width: 60px;
+    text-align: center;
+}
+.feature-content h3 { margin-bottom: 0.2rem; }
+.feature-content p {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* ── Final slide ─────────────────────────────────────── */
+.final-cta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 28px;
+    background: var(--ink);
+    color: white;
+    border-radius: 999px;
+    font-weight: 500;
+    margin-top: 1.5rem;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 800px) {
+    .split { grid-template-columns: 1fr; gap: 2rem; }
+    .slide { padding: 4vh 5vw; }
+    .tg-window { max-width: 100%; }
+    .cmd-item .cmd-name { min-width: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+    <!-- ════ SLIDE 1: PORTADA ════ -->
+    <section class="slide active">
+        <div class="hero-emoji">🤖</div>
+        <p class="eyebrow">Asistente personal en Telegram</p>
+        <h1>Conoce a CAMSI</h1>
+        <p class="subtitle">
+            Un asistente que entiende lo que le escribes (o le dices con la voz)
+            y se encarga de tus recordatorios, tu agenda y tus pendientes.
+        </p>
+    </section>
+
+    <!-- ════ SLIDE 2: ¿QUÉ ES? ════ -->
+    <section class="slide">
+        <p class="eyebrow">¿Qué es CAMSI?</p>
+        <h2>Es como tener una secretaria en tu bolsillo</h2>
+        <p class="subtitle">
+            Vive dentro de Telegram. Le hablas como le hablarías a una persona
+            y ella se encarga del resto.
+        </p>
+        <div class="card-grid three">
+            <div class="card">
+                <div class="icon">💬</div>
+                <h3>Lenguaje natural</h3>
+                <p>No tienes que aprender comandos raros. Le dices "agéndame una junta el martes a las 3" y listo.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🎙️</div>
+                <h3>Mensajes de voz</h3>
+                <p>¿Vas manejando? Mándale una nota de voz. CAMSI la entiende perfecto y te responde con voz también.</p>
+            </div>
+            <div class="card">
+                <div class="icon">⏰</div>
+                <h3>Te avisa solita</h3>
+                <p>Cuando llega la hora de un recordatorio, te llega una notificación con botones para marcar como hecho o posponer.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 3: CÓMO LE HABLAS ════ -->
+    <section class="slide">
+        <div class="split">
+            <div class="split-text">
+                <p class="eyebrow">Cómo se usa</p>
+                <h2>Le escribes como a un amigo</h2>
+                <p>No hay menús, no hay formularios. Le dices lo que necesitas y CAMSI lo interpreta y lo ejecuta.</p>
+                <ul>
+                    <li><span class="dot">›</span> "Recuérdame en 10 minutos tomar agua"</li>
+                    <li><span class="dot">›</span> "Agéndame una junta el martes 3 PM"</li>
+                    <li><span class="dot">›</span> "¿Qué tengo para mañana?"</li>
+                    <li><span class="dot">›</span> "Cancela mi cita del viernes"</li>
+                </ul>
+            </div>
+            <div class="tg-window">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">en línea</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out">Recuérdame en 10 minutos tomar agua 💧</div>
+                    <div class="bubble in">Listo. Te recuerdo a las <strong>3:25 PM</strong>. ✅</div>
+                    <div class="bubble out">¿Qué tengo para mañana?</div>
+                    <div class="bubble in">Mañana tienes 2 eventos:<br>• <strong>9:00 AM</strong> Junta con cliente<br>• <strong>4:00 PM</strong> Pagar internet</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 4: VOZ ════ -->
+    <section class="slide">
+        <div class="split">
+            <div class="tg-window">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">escuchando…</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out">
+                        <div class="voice">
+                            <div class="voice-icon">▶</div>
+                            <div class="voice-wave" id="wave1"></div>
+                            <span style="font-size:0.75rem;color:#888">0:08</span>
+                        </div>
+                    </div>
+                    <div class="bubble in"><em>🎙️ Entendí:</em> "Agéndame una llamada con Pedro mañana a las 11"</div>
+                    <div class="bubble in">¡Hecho! Te agendé una llamada con Pedro para mañana <strong>11:00 AM</strong>. 📞</div>
+                    <div class="bubble in">
+                        <div class="voice">
+                            <div class="voice-icon">▶</div>
+                            <div class="voice-wave" id="wave2"></div>
+                            <span style="font-size:0.75rem;color:#888">0:04</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="split-text">
+                <p class="eyebrow">Mensajes de voz</p>
+                <h2>Habla, no escribas</h2>
+                <p>Cuando estás manejando, cocinando o en una reunión, mandar texto es incómodo. CAMSI acepta notas de voz y te responde también con voz.</p>
+                <p style="margin-top:1.5rem"><strong style="color:var(--ink)">Lo más útil:</strong> CAMSI te lee la respuesta en voz alta para que no tengas que leer la pantalla. Y si quieres ver el texto, hay un botón "Ver texto" en cada audio.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 5: COMANDOS RÁPIDOS ════ -->
+    <section class="slide">
+        <p class="eyebrow">Los 11 comandos rápidos</p>
+        <h2>Atajos para lo que más usas</h2>
+        <p class="subtitle">Aunque puedes hablarle libremente, también hay comandos cortos para acciones frecuentes.</p>
+        <div class="cmd-list">
+            <div class="cmd-item">
+                <div class="cmd-name">/start</div>
+                <div class="cmd-desc">Inicia la conversación. Es el primer comando que usas con CAMSI.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/ayuda</div>
+                <div class="cmd-desc">Muestra la lista de comandos. Cuando se te olvide algo.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/agenda</div>
+                <div class="cmd-desc">Tus eventos pendientes para hoy, con botones para marcarlos.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/semana</div>
+                <div class="cmd-desc">Tu agenda de los próximos 7 días, en lista compacta.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/reporte</div>
+                <div class="cmd-desc">PDF con tu productividad: hoy, esta semana o este mes.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/voz</div>
+                <div class="cmd-desc">Activa o desactiva las respuestas en audio.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/perfil</div>
+                <div class="cmd-desc">Cambia la voz de CAMSI y revisa tu configuración.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/sugerencias</div>
+                <div class="cmd-desc">CAMSI analiza tus hábitos y te propone mejoras.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/dashboard</div>
+                <div class="cmd-desc">Abre tu dashboard web personal en el navegador.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/olvidar</div>
+                <div class="cmd-desc">Borra el historial de chat. No borra tus eventos.</div>
+            </div>
+            <div class="cmd-item">
+                <div class="cmd-name">/cancelar</div>
+                <div class="cmd-desc">Sale del modo edición de un evento sin guardar cambios.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 6: /agenda ════ -->
+    <section class="slide">
+        <div class="split">
+            <div class="split-text">
+                <p class="eyebrow">Comando /agenda</p>
+                <h2>Tu día de un vistazo</h2>
+                <p>Escribes <code>/agenda</code> y CAMSI te muestra todo lo que tienes pendiente para hoy. Cada evento aparece con cuatro botones de acción rápida:</p>
+                <ul>
+                    <li><span class="dot">✅</span> Marcar como completado</li>
+                    <li><span class="dot">⏰</span> Posponer 15 minutos</li>
+                    <li><span class="dot">📝</span> Editar el evento</li>
+                    <li><span class="dot">❌</span> Cancelarlo</li>
+                </ul>
+            </div>
+            <div class="tg-window">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">en línea</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out"><span class="cmd">/agenda</span></div>
+                    <div class="bubble in">📅 <strong>Tu agenda de hoy</strong> — 3 eventos</div>
+                    <div class="bubble in">
+                        ⏰ <code>9:00 AM</code> — <strong>Llamada con Pedro</strong> 💼<br>
+                        <em>ID: 142</em>
+                        <div class="tg-buttons">
+                            <div class="tg-btn">✅</div>
+                            <div class="tg-btn warn">⏰+15</div>
+                            <div class="tg-btn">📝 Editar</div>
+                            <div class="tg-btn danger">❌</div>
+                        </div>
+                    </div>
+                    <div class="bubble in">
+                        📅 <code>3:00 PM</code> — <strong>Junta de equipo</strong> 💼
+                        <div class="tg-buttons">
+                            <div class="tg-btn">✅</div>
+                            <div class="tg-btn warn">⏰+15</div>
+                            <div class="tg-btn">📝 Editar</div>
+                            <div class="tg-btn danger">❌</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 7: RECORDATORIOS RECURRENTES ════ -->
+    <section class="slide">
+        <p class="eyebrow">Recordatorios inteligentes</p>
+        <h2>Eventos que se repiten solos</h2>
+        <p class="subtitle">Le dices "cada lunes", "cada 20 minutos", "cada día 7 del mes" y CAMSI se encarga de avisarte cada vez sin que tengas que reprogramarlo.</p>
+        <div class="card-grid two" style="max-width:920px">
+            <div class="card">
+                <div class="icon">🔁</div>
+                <h3>Frases que entiende</h3>
+                <p style="margin-top:0.6rem"><code>cada 20 minutos tomar agua</code></p>
+                <p><code>todos los lunes a las 9</code></p>
+                <p><code>cada día 7 pagar internet</code></p>
+                <p><code>lunes, miércoles y viernes</code></p>
+                <p><code>cada año el 15 de mayo</code></p>
+            </div>
+            <div class="tg-window" style="max-width:none">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">en línea</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out">Recuérdame cada 20 minutos tomar agua 💧</div>
+                    <div class="bubble in">¡Listo! Te recordaré <strong>cada 20 minutos</strong> tomar agua. 💧</div>
+                    <div class="bubble system">— 20 minutos después —</div>
+                    <div class="bubble in">
+                        ⏰ <strong>Recordatorio:</strong> tomar agua
+                        <div class="tg-buttons">
+                            <div class="tg-btn">✅ Hecho</div>
+                            <div class="tg-btn warn">⏰+15</div>
+                            <div class="tg-btn danger">🛑 Detener serie</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="highlight">
+            <strong>Hecho ≠ Detener serie.</strong> Cuando confirmas con <strong>✅ Hecho</strong>, CAMSI solo registra que cumpliste esa vez y la serie sigue activa. Para terminar la serie completa usa <strong>🛑 Detener serie</strong>.
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 8: /reporte ════ -->
+    <section class="slide">
+        <div class="split">
+            <div class="split-text">
+                <p class="eyebrow">Comando /reporte</p>
+                <h2>Reportes en PDF</h2>
+                <p>Genera reportes de productividad listos para imprimir o compartir. Eliges el período y CAMSI te manda el PDF con totales, completados, pendientes y todo lo que pasó en ese tiempo.</p>
+                <ul>
+                    <li><span class="dot">📅</span> <strong>Hoy:</strong> resumen del día</li>
+                    <li><span class="dot">📆</span> <strong>Esta semana:</strong> los últimos 7 días</li>
+                    <li><span class="dot">🗓️</span> <strong>Este mes:</strong> mes completo</li>
+                </ul>
+            </div>
+            <div class="tg-window">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">en línea</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out"><span class="cmd">/reporte</span></div>
+                    <div class="bubble in">
+                        📊 ¿Qué período quieres reportar?
+                        <div class="tg-buttons" style="flex-direction:column">
+                            <div class="tg-btn">📅 Hoy</div>
+                            <div class="tg-btn">📆 Esta semana</div>
+                            <div class="tg-btn">🗓️ Este mes</div>
+                        </div>
+                    </div>
+                    <div class="bubble in">
+                        📊 <strong>Reporte — Esta semana</strong><br>
+                        Total: <strong>17</strong> · ✅ 12 · ⏳ 5
+                    </div>
+                    <div class="bubble in" style="font-size:0.78rem;color:#888;display:flex;align-items:center;gap:8px">
+                        📄 reporte_weekly.pdf<br>
+                        <span style="color:#5288C1">Aquí está tu reporte de productividad</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 9: AUTOMATIZACIONES ════ -->
+    <section class="slide">
+        <p class="eyebrow">Funciona sin que se lo pidas</p>
+        <h2>Lo que CAMSI hace solita</h2>
+        <p class="subtitle">Estas son las cosas que pasan automáticamente, sin que tengas que escribir un comando.</p>
+        <div style="width:100%;max-width:820px">
+            <div class="feature-row">
+                <div class="feature-icon">☀️</div>
+                <div class="feature-content">
+                    <h3>Briefing matutino</h3>
+                    <p>Cada mañana a la hora que tú elijas, CAMSI te manda un PDF con tu agenda del día y un saludo en audio.</p>
+                </div>
+            </div>
+            <div class="feature-row">
+                <div class="feature-icon">🌙</div>
+                <div class="feature-content">
+                    <h3>Resumen nocturno</h3>
+                    <p>En la noche te llega un resumen del día: cuántos eventos cumpliste, cuántos quedaron pendientes y un PDF para tu archivo.</p>
+                </div>
+            </div>
+            <div class="feature-row">
+                <div class="feature-icon">⏰</div>
+                <div class="feature-content">
+                    <h3>Recordatorios al instante</h3>
+                    <p>Cuando llega la hora de un evento, CAMSI te avisa con un mensaje y un audio. Si no respondes, te insiste cada minuto (hasta 6 veces) para que no se te pase.</p>
+                </div>
+            </div>
+            <div class="feature-row">
+                <div class="feature-icon">💡</div>
+                <div class="feature-content">
+                    <h3>Sugerencias proactivas</h3>
+                    <p>Si nota que repites el mismo recordatorio 3+ veces, te sugiere hacerlo recurrente. Si tienes tareas estancadas hace una semana, te lo dice.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 10: DASHBOARD ════ -->
+    <section class="slide">
+        <p class="eyebrow">Comando /dashboard</p>
+        <h2>Tu agenda también en la web</h2>
+        <p class="subtitle">Si prefieres ver tu información en pantalla grande, CAMSI te genera un enlace personal y privado a tu dashboard web.</p>
+        <div class="card-grid three" style="max-width:980px">
+            <div class="card">
+                <div class="icon">📊</div>
+                <h3>KPIs en vivo</h3>
+                <p>Eventos de hoy, completados de la semana, pendientes totales y tu racha de productividad.</p>
+            </div>
+            <div class="card">
+                <div class="icon">📅</div>
+                <h3>Agenda visual</h3>
+                <p>Tus próximos 30 días en formato calendario, con código de colores por categoría.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🔒</div>
+                <h3>Privado y seguro</h3>
+                <p>Cada enlace es único para ti y expira en 24 horas. Nadie más puede ver tu información.</p>
+            </div>
+        </div>
+        <div class="highlight">
+            Solo escribes <strong>/dashboard</strong> y CAMSI te manda un botón "🔗 Abrir dashboard". Un clic y ya estás dentro.
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 11: PERFIL Y VOZ ════ -->
+    <section class="slide">
+        <div class="split">
+            <div class="split-text">
+                <p class="eyebrow">Comandos /perfil y /voz</p>
+                <h2>Personaliza a CAMSI</h2>
+                <p>Elige cómo quieres que CAMSI suene y cuándo te avise. Tienes 6 voces disponibles para escoger la que más te guste:</p>
+                <ul>
+                    <li><span class="dot">🌟</span> <strong>Nova</strong> — femenina, clara (recomendada)</li>
+                    <li><span class="dot">✨</span> <strong>Shimmer</strong> — femenina, suave</li>
+                    <li><span class="dot">🎵</span> <strong>Echo</strong> — masculina, calmada</li>
+                    <li><span class="dot">📖</span> <strong>Fable</strong> — masculina, expresiva</li>
+                    <li><span class="dot">🎭</span> <strong>Onyx</strong> — masculina, profunda</li>
+                    <li><span class="dot">⚪</span> <strong>Alloy</strong> — neutral</li>
+                </ul>
+                <p style="margin-top:1.2rem;font-size:0.9rem;color:var(--ink-muted)">Con <code>/voz</code> activas o desactivas las respuestas de audio cuando quieras silencio.</p>
+            </div>
+            <div class="tg-window">
+                <div class="tg-header">
+                    <div class="tg-avatar">C</div>
+                    <div>
+                        <div class="tg-name">CAMSI</div>
+                        <div class="tg-status">en línea</div>
+                    </div>
+                </div>
+                <div class="tg-body">
+                    <div class="bubble out"><span class="cmd">/perfil</span></div>
+                    <div class="bubble in">
+                        ⚙️ <strong>Tu perfil:</strong><br>
+                        • Zona horaria: <code>America/Mexico_City</code><br>
+                        • Voz actual: <code>nova</code><br>
+                        • Briefing: <code>08:00</code><br>
+                        • Wrap-up: <code>20:00</code><br>
+                        • Voz: <code>Activada ✅</code>
+                        <div style="margin-top:8px;font-size:0.82rem;color:#888">🎙️ <em>Elige la voz de CAMSI:</em></div>
+                        <div class="tg-buttons" style="flex-direction:column;margin-top:8px">
+                            <div class="tg-btn">▶️ Nova — Femenina, clara</div>
+                            <div class="tg-btn">Shimmer — Femenina, suave</div>
+                            <div class="tg-btn">Echo — Masculina, calma</div>
+                            <div class="tg-btn">Onyx — Masculina, profunda</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ════ SLIDE 12: CIERRE ════ -->
+    <section class="slide">
+        <div class="hero-emoji" style="font-size:5rem">✨</div>
+        <h1>Eso es todo</h1>
+        <p class="subtitle">
+            CAMSI está pensada para que la uses como hablas con cualquier persona.
+            Sin manuales, sin formularios. Solo abre Telegram y escríbele.
+        </p>
+        <div class="card-grid three" style="max-width:900px">
+            <div class="card" style="text-align:center">
+                <div class="icon">1️⃣</div>
+                <h3>Abres Telegram</h3>
+                <p>Buscas el bot y escribes <code>/start</code>.</p>
+            </div>
+            <div class="card" style="text-align:center">
+                <div class="icon">2️⃣</div>
+                <h3>Le hablas</h3>
+                <p>Por texto o por voz. CAMSI entiende.</p>
+            </div>
+            <div class="card" style="text-align:center">
+                <div class="icon">3️⃣</div>
+                <h3>Se encarga</h3>
+                <p>Te recuerda, te organiza, te reporta.</p>
+            </div>
+        </div>
+        <div class="final-cta">🚀 ¿Listo para empezar?</div>
+    </section>
+
+</div>
+
+<!-- ── Navegación ─────────────────────────────────────── -->
+<div class="nav">
+    <button class="nav-btn" id="prev" aria-label="Anterior">←</button>
+    <div class="dots" id="dots"></div>
+    <span class="counter" id="counter">1 / 12</span>
+    <button class="nav-btn" id="next" aria-label="Siguiente">→</button>
+</div>
+
+<div class="hint" id="hint">
+    Navega con <span class="kbd">←</span> <span class="kbd">→</span> o haciendo clic
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total = slides.length;
+const dotsContainer = document.getElementById('dots');
+const counter = document.getElementById('counter');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+const hint = document.getElementById('hint');
+let current = 0;
+
+// Crear los dots
+slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(d);
+});
+
+function goTo(idx) {
+    if (idx < 0 || idx >= total) return;
+    slides[current].classList.remove('active');
+    if (idx < current) slides[current].classList.add('prev');
+    else slides[current].classList.remove('prev');
+    current = idx;
+    slides.forEach((s, i) => {
+        s.classList.toggle('active', i === current);
+        if (i !== current) s.classList.toggle('prev', i < current);
+    });
+    document.querySelectorAll('.dot').forEach((d, i) =>
+        d.classList.toggle('active', i === current)
+    );
+    counter.textContent = `${current + 1} / ${total}`;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+    if (current > 0) hint.style.opacity = '0';
+}
+
+prevBtn.addEventListener('click', () => goTo(current - 1));
+nextBtn.addEventListener('click', () => goTo(current + 1));
+prevBtn.disabled = true;
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        goTo(current + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        goTo(current - 1);
+    } else if (e.key === 'Home') {
+        goTo(0);
+    } else if (e.key === 'End') {
+        goTo(total - 1);
+    }
+});
+
+// Animación de las ondas de voz
+function animateWaves(elementId) {
+    const wave = document.getElementById(elementId);
+    if (!wave) return;
+    const heights = [];
+    for (let i = 0; i < 32; i++) {
+        const span = document.createElement('span');
+        const h = 4 + Math.random() * 18;
+        heights.push(h);
+        span.style.height = h + 'px';
+        wave.appendChild(span);
+    }
+}
+animateWaves('wave1');
+animateWaves('wave2');
+
+counter.textContent = `1 / ${total}`;
+</script>
+
+</body>
+</html>

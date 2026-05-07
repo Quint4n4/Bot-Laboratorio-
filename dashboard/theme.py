@@ -1,5 +1,5 @@
 """
-theme.py — Paleta y estilos del dashboard ARIA
+theme.py — Paleta y estilos del dashboard CAMSI
 Diseño: Exaggerated Minimalism + monocromo + un solo acento.
 Typography: Inter (UI) + JetBrains Mono (números tabulares).
 """
