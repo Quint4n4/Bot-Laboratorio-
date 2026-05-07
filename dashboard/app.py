@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="CAMSI — Dashboard",
     page_icon="●",
     layout="wide",
-    initial_sidebar_state="auto",  # auto: abierto en desktop, cerrado en movil
+    initial_sidebar_state="expanded",  # siempre expandido por default (incluso en movil)
 )
 inject_css()
 

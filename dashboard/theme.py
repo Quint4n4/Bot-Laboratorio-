@@ -376,6 +376,12 @@ hr {
 
 /* ════════════════════════════════════════════════════════════
    RESPONSIVE — Movil
+   Estrategia: sidebar como drawer SIEMPRE expandido por defecto,
+   superpuesto al contenido. En lugar de pelear con el toggle nativo
+   de Streamlit (cuyo selector cambia entre versiones), forzamos:
+   1) sidebar visible al cargar
+   2) cuando el usuario lo colapsa, queda completamente oculto
+   3) un toggle FORCED VISIBLE con varios selectores como respaldo
    ════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
     /* Container principal con menos padding en movil */
@@ -417,45 +423,73 @@ hr {
         font-size: 15px;
     }
 
-    /* Sidebar: comportamiento de drawer (overlay) en movil */
+    /* ─── Sidebar como DRAWER overlay ─────────────────────────────
+       Cubre el contenido cuando esta abierto. Aria-expanded=true
+       (default) lo muestra. False lo oculta totalmente.        */
     [data-testid="stSidebar"] {
-        width: 80vw !important;
-        max-width: 320px !important;
-        background: #FFFFFF !important;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15) !important;
-        border-right: 1px solid #E5E5E5 !important;
-    }
-
-    /* Cuando esta colapsado, ocultarlo completo (no dejar barra rara) */
-    [data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -100% !important;
-    }
-
-    /* Toggle del sidebar mas grande y visible (44x44 minimo para touch) */
-    [data-testid="collapsedControl"],
-    button[kind="header"] {
         position: fixed !important;
-        top: 0.5rem !important;
-        left: 0.5rem !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 82vw !important;
+        max-width: 320px !important;
+        height: 100vh !important;
+        height: 100dvh !important;
         z-index: 999 !important;
         background: #FFFFFF !important;
-        border: 1px solid #E5E5E5 !important;
-        border-radius: 10px !important;
-        padding: 8px !important;
-        width: 44px !important;
-        height: 44px !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18) !important;
+        border-right: 1px solid #E5E5E5 !important;
+        transition: transform 250ms ease !important;
     }
 
-    /* El boton de cerrar el sidebar (X) tambien grande */
-    [data-testid="stSidebar"] button[kind="header"] {
-        width: 44px !important;
-        height: 44px !important;
+    /* Sidebar expandido visible (default tras initial_sidebar_state=expanded) */
+    [data-testid="stSidebar"][aria-expanded="true"] {
+        transform: translateX(0) !important;
+    }
+    /* Sidebar colapsado: lo metemos fuera completamente */
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        transform: translateX(-110%) !important;
+    }
+
+    /* ─── Toggle del sidebar (FORCED VISIBLE con multiples selectores)
+       Streamlit cambia el data-testid entre versiones; aplicamos a varios. */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[kind="header"],
+    button[kind="headerNoPadding"] {
+        position: fixed !important;
+        top: 0.6rem !important;
+        left: 0.6rem !important;
+        z-index: 1000 !important;
+        background: #0A0A0A !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0 !important;
+        width: 48px !important;
+        height: 48px !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    /* El icono interior del toggle blanco */
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    button[kind="header"] svg {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+        stroke: #FFFFFF !important;
+        width: 22px !important;
+        height: 22px !important;
     }
 
     /* Espaciado superior en el contenido principal para que el toggle no tape */
     section[data-testid="stMain"] .block-container {
-        padding-top: 3.5rem !important;
+        padding-top: 4rem !important;
     }
 
     /* Forms y selects con altura adecuada para touch */
