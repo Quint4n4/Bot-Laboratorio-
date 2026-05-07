@@ -53,7 +53,21 @@ html, body, [class*="css"], .main {
 }
 
 /* Hide Streamlit chrome para look pro */
-#MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
+#MainMenu, footer { visibility: hidden; height: 0; }
+
+/* Header transparente pero NO oculto, asi se mantiene el toggle del sidebar visible */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Asegurar que el control de colapsar/expandir el sidebar siempre sea visible */
+[data-testid="collapsedControl"],
+button[kind="header"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
 
 /* Container principal: mucho whitespace */
 .block-container {

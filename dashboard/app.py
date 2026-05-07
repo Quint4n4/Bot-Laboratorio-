@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="CAMSI — Dashboard",
     page_icon="●",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",  # mostrar el menu lateral abierto desde el arranque
 )
 inject_css()
 
