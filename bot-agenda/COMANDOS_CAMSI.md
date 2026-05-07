@@ -31,14 +31,6 @@ Muestra los eventos pendientes que tienes para **hoy**. Cada evento aparece como
 ### `/semana`
 Lista compacta de tus eventos pendientes de los **proximos 7 dias**, ordenados por fecha. Pensado para ver de un vistazo lo que viene.
 
-### `/reporte`
-Genera un reporte de productividad en PDF. Te pregunta el periodo y eliges entre:
-- 📅 Hoy
-- 📆 Esta semana
-- 🗓️ Este mes
-
-El PDF incluye totales, eventos completados y pendientes del periodo elegido.
-
 ### `/voz`
 Activa o desactiva las **respuestas de voz**. Cuando esta activado, CAMSI te contesta con un audio (mas un boton "Ver texto" para leer la transcripcion). Cuando esta desactivado, solo responde con texto.
 
@@ -77,7 +69,6 @@ CAMSI entiende texto libre y notas de voz. Puedes decirle directamente lo que qu
 - *"Cancela mi cita del viernes"* → cancela un evento
 - *"Reagenda la junta de las 3 para las 5"* → modifica un evento existente
 - *"Marca como hecha la tarea de pagar internet"* → completa un evento
-- *"Hazme un reporte de la semana"* → genera reporte PDF
 
 ### Notas de voz
 
