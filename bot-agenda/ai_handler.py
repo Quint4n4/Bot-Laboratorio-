@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 from sqlalchemy.orm import Session
-from database import Event, User, EventType, EventStatus, Message
+from database import Event, User, EventType, EventStatus, Message, Note
 
 # Strip defensivo por si la API key viene con \n o comillas accidentales
 _OPENAI_KEY = os.getenv("OPENAI_API_KEY", "").strip().strip('"').strip("'")
@@ -164,6 +164,113 @@ TOOLS = [
                     "period": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
                 },
                 "required": ["period"],
+            },
+        },
+    },
+    # ────────────────────────────────────────────────────────────────────
+    # NOTAS
+    # ────────────────────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "create_note",
+            "description": (
+                "Guarda una nota: texto que el usuario quiere recordar pero SIN fecha de aviso. "
+                "Util para guardar contraseñas, datos de contacto, ideas, listas, etc. "
+                "Inferi un titulo corto (3-6 palabras) y la categoria del contexto."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content":  {"type": "string", "description": "Texto literal de la nota tal como el usuario lo dijo."},
+                    "title":    {"type": "string", "description": "Titulo corto generado a partir del contenido (3-6 palabras)."},
+                    "category": {"type": "string", "enum": ["personal", "trabajo", "salud", "finanzas", "familia", "social", "otros"]},
+                    "tags":     {"type": "string", "description": "Palabras clave separadas por coma para busqueda futura. Ejemplo: 'wifi,oficina,contraseña'"},
+                },
+                "required": ["content", "title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_notes",
+            "description": "Lista las notas del usuario, opcionalmente filtradas por categoria. Devuelve las mas recientes primero.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "enum": ["personal", "trabajo", "salud", "finanzas", "familia", "social", "otros"]},
+                    "limit":    {"type": "integer", "description": "Maximo de notas a devolver (default 10)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_notes",
+            "description": (
+                "Busca notas por palabras clave. Usa esto cuando el usuario pregunta '¿que tenia "
+                "guardado sobre X?' o 'busca mi nota de Y'. La busqueda es por substring en titulo, "
+                "contenido y tags."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Texto a buscar"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_note",
+            "description": "Edita una nota existente. Solo cambia los campos provistos.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id":      {"type": "integer"},
+                    "new_title":    {"type": "string"},
+                    "new_content":  {"type": "string"},
+                    "new_category": {"type": "string", "enum": ["personal", "trabajo", "salud", "finanzas", "familia", "social", "otros"]},
+                    "new_tags":     {"type": "string"},
+                },
+                "required": ["note_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_note",
+            "description": "Elimina (archiva) una nota. La nota desaparece de las listas pero se preserva en BD por si hace falta auditar.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id": {"type": "integer"},
+                },
+                "required": ["note_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_note_reminder",
+            "description": (
+                "Programa un recordatorio para una nota existente. Cuando llegue la hora, CAMSI le enviara al "
+                "usuario el contenido de la nota. Al completarse la nota SIGUE existiendo. "
+                "Usa esto cuando el usuario diga '¿recuerdame mi nota X a las 5 PM?' o similar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id":         {"type": "integer", "description": "ID de la nota a recordar"},
+                    "start_datetime":  {"type": "string",  "description": "Hora local del usuario en ISO 8601 (sin timezone). Ejemplo: 2026-04-22T16:00:00"},
+                },
+                "required": ["note_id", "start_datetime"],
             },
         },
     },
@@ -420,6 +527,170 @@ def _exec_generate_report(args: dict, user_id: str, db: Session) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# EJECUTORES — NOTAS
+# ---------------------------------------------------------------------------
+
+def _exec_create_note(args: dict, user_id: str, db: Session) -> dict:
+    """Crea una nota."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        note = Note(
+            user_telegram_id=user_id,
+            title=args["title"].strip()[:200],
+            content=args["content"].strip(),
+            category=args.get("category", "otros"),
+            tags=args.get("tags") or None,
+        )
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        logger.info(f"CREATE_NOTE OK id={note.id} title='{note.title}'")
+        return {
+            "ok": True,
+            "note_id": note.id,
+            "title": note.title,
+            "category": note.category,
+        }
+    except Exception as e:
+        logger.error(f"ERROR en _exec_create_note: {e}", exc_info=True)
+        return {"ok": False, "error": str(e)}
+
+
+def _exec_list_notes(args: dict, user_id: str, db: Session) -> dict:
+    """Lista las notas del usuario, filtrables por categoria."""
+    q = db.query(Note).filter(
+        Note.user_telegram_id == user_id,
+        Note.archived == False,
+    )
+    if args.get("category"):
+        q = q.filter(Note.category == args["category"])
+    limit = int(args.get("limit") or 10)
+    rows = q.order_by(Note.created_at.desc()).limit(limit).all()
+    return {
+        "count": len(rows),
+        "notes": [
+            {
+                "id": n.id,
+                "title": n.title,
+                "content": n.content,
+                "category": n.category,
+                "tags": n.tags,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+def _exec_search_notes(args: dict, user_id: str, db: Session) -> dict:
+    """Busca notas por substring en titulo, contenido y tags."""
+    from sqlalchemy import or_, func
+    query = (args.get("query") or "").strip()
+    if not query:
+        return {"count": 0, "notes": []}
+    pattern = f"%{query}%"
+    rows = (
+        db.query(Note)
+        .filter(
+            Note.user_telegram_id == user_id,
+            Note.archived == False,
+            or_(
+                func.lower(Note.title).like(pattern.lower()),
+                func.lower(Note.content).like(pattern.lower()),
+                func.lower(func.coalesce(Note.tags, "")).like(pattern.lower()),
+            ),
+        )
+        .order_by(Note.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return {
+        "count": len(rows),
+        "query": query,
+        "notes": [
+            {
+                "id": n.id,
+                "title": n.title,
+                "content": n.content,
+                "category": n.category,
+                "tags": n.tags,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+def _exec_update_note(args: dict, user_id: str, db: Session) -> dict:
+    """Edita campos de una nota."""
+    note = db.query(Note).filter(
+        Note.id == args["note_id"],
+        Note.user_telegram_id == user_id,
+    ).first()
+    if not note:
+        return {"ok": False, "error": "Nota no encontrada"}
+    if args.get("new_title"):    note.title    = args["new_title"].strip()[:200]
+    if args.get("new_content"):  note.content  = args["new_content"].strip()
+    if args.get("new_category"): note.category = args["new_category"]
+    if "new_tags" in args:       note.tags     = args["new_tags"] or None
+    db.commit()
+    return {"ok": True, "note_id": note.id}
+
+
+def _exec_delete_note(args: dict, user_id: str, db: Session) -> dict:
+    """Marca una nota como archivada (no la borra fisicamente)."""
+    note = db.query(Note).filter(
+        Note.id == args["note_id"],
+        Note.user_telegram_id == user_id,
+    ).first()
+    if not note:
+        return {"ok": False, "error": "Nota no encontrada"}
+    note.archived = True
+    db.commit()
+    return {"ok": True, "note_id": note.id, "title": note.title}
+
+
+def _exec_create_note_reminder(args: dict, user_id: str, db: Session, tz: ZoneInfo) -> dict:
+    """Crea un Event vinculado a una Note. Al disparar el evento se mostrara el
+    contenido de la nota; la nota sigue existiendo despues."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        note = db.query(Note).filter(
+            Note.id == args["note_id"],
+            Note.user_telegram_id == user_id,
+        ).first()
+        if not note:
+            return {"ok": False, "error": "Nota no encontrada"}
+
+        start_utc = _local_to_utc(args["start_datetime"], tz)
+        event = Event(
+            user_telegram_id=user_id,
+            title=f"Nota: {note.title}",
+            event_type="reminder",
+            start_datetime=start_utc,
+            note_id=note.id,
+            category=note.category or "otros",
+            description=note.content[:500],
+        )
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        logger.info(f"CREATE_NOTE_REMINDER OK event={event.id} note={note.id}")
+        return {
+            "ok": True,
+            "event_id": event.id,
+            "note_id": note.id,
+            "title": note.title,
+            "start_local": _fmt_local(event.start_datetime, tz),
+        }
+    except Exception as e:
+        logger.error(f"ERROR en _exec_create_note_reminder: {e}", exc_info=True)
+        return {"ok": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # DESPACHO DE TOOLS
 # ---------------------------------------------------------------------------
 def dispatch_tool(name: str, args: dict, user_id: str, db: Session, tz: ZoneInfo) -> str:
@@ -441,6 +712,19 @@ def dispatch_tool(name: str, args: dict, user_id: str, db: Session, tz: ZoneInfo
             result = _exec_query_agenda(args, user_id, db, tz)
         elif name == "generate_report":
             result = _exec_generate_report(args, user_id, db)
+        # ── Notas ────────────────────────────────────────────────────
+        elif name == "create_note":
+            result = _exec_create_note(args, user_id, db)
+        elif name == "list_notes":
+            result = _exec_list_notes(args, user_id, db)
+        elif name == "search_notes":
+            result = _exec_search_notes(args, user_id, db)
+        elif name == "update_note":
+            result = _exec_update_note(args, user_id, db)
+        elif name == "delete_note":
+            result = _exec_delete_note(args, user_id, db)
+        elif name == "create_note_reminder":
+            result = _exec_create_note_reminder(args, user_id, db, tz)
         else:
             result = {"error": f"Tool '{name}' no implementada"}
         logger.info(f"TOOL_RESULT: {name} -> {str(result)[:200]}")
@@ -478,6 +762,52 @@ Siempre incluye "category" al crear o editar un evento. Inferela del contexto:
 - otros:     solo cuando ninguna otra encaje claramente
 Ejemplos: "pagar internet" = finanzas | "cita con dentista" = salud |
 "reporte al jefe" = trabajo | "cumple de mama" = familia | "cena con amigos" = social.
+
+NOTAS vs EVENTOS — diferencia clave:
+- EVENTO: una accion que CAMSI debe avisarte en una FECHA/HORA especifica.
+  Ejemplos: "recuerdame en 10 min tomar agua", "agendame junta el martes 3 PM".
+- NOTA: informacion que el usuario quiere GUARDAR para consultar despues.
+  No tiene fecha de aviso. Ejemplos: "el wifi es 1234", "el correo de Juan es...",
+  "anota que la presentacion es el martes", "guarda que Pedro me debe 500".
+
+REGLA DE DESAMBIGUACION (MUY IMPORTANTE):
+Si el usuario dice "recuerdame que [INFORMACION]" SIN especificar tiempo
+explicito (ej. "recuerdame que el wifi es 1234"), NO llames create_event ni
+create_note todavia. En vez de eso, RESPONDE EN TEXTO preguntando:
+
+  "¿Quieres que lo guarde como nota o prefieres que te lo recuerde a una hora
+  especifica? Para nota responde 'nota'. Para recordatorio dime cuando
+  ('en 1 hora', 'a las 5 PM', 'manana')."
+
+Cuando el usuario responda en el siguiente mensaje (vas a ver el contenido
+original en el historial), llamas la tool correcta:
+- Si dice "nota" o "guardar" → create_note con el contenido original
+- Si da una hora → create_event con start_datetime calculado y title corto
+  basado en el contenido (NO incluyas la palabra "recuerdame" en el title)
+
+CASOS QUE NO REQUIEREN PREGUNTAR (llamas la tool directo):
+- "anota que..." / "guarda que..." / "tengo una nota: ..." → create_note directo
+- "agrega a mis notas..." → create_note directo
+- "recuerdame en X minutos..." → create_event directo (tiempo explicito)
+- "recuerdame manana a las Y..." → create_event directo (tiempo explicito)
+- "recuerdame [accion verbal]" sin info y sin tiempo (ej "recuerdame estirarme")
+   → preguntar como en la regla de desambiguacion
+
+CONSULTAR / BUSCAR NOTAS:
+- "¿que notas tengo?" → list_notes
+- "muestrame mis notas de trabajo" → list_notes(category="trabajo")
+- "busca mi nota del wifi" / "¿que tenia guardado sobre Pedro?" → search_notes(query=...)
+
+RECORDAR UNA NOTA EXISTENTE A UNA HORA:
+Si el usuario dice "recuerdame mi nota de X a las 5 PM" o "avisa de mi nota
+del wifi manana": primero search_notes(query=...) para encontrar la nota.
+Si encuentras una sola, llama create_note_reminder(note_id, start_datetime).
+Si encuentras varias, listale las opciones y pidele que elija.
+La nota NO se borra cuando llega el recordatorio.
+
+EDITAR / BORRAR NOTAS:
+- "edita mi nota X..." → primero search_notes para encontrarla, luego update_note.
+- "borra la nota de Y" → primero search_notes, luego delete_note.
 
 RECURRENCIA (cuando el usuario lo indica explicito):
 Si el usuario dice "cada", "todos los", "siempre", agrega recurrence_rule:

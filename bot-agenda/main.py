@@ -20,7 +20,7 @@ from telegram.ext import (
     CallbackQueryHandler, ContextTypes, filters
 )
 
-from database import init_db, SessionLocal, User, Event, EventStatus
+from database import init_db, SessionLocal, User, Event, EventStatus, Note
 from ai_handler import process_message, reset_history, analyze_patterns
 from voice_handler import transcribe_voice, text_to_speech
 from scheduler import start_scheduler
@@ -124,7 +124,7 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📋 *Comandos disponibles:*\n\n"
         "• /agenda — Ver tu agenda de hoy\n"
         "• /semana — Ver agenda de los próximos 7 días\n"
-        "• /reporte — Reporte de productividad (diario/semanal/mensual)\n"
+        "• /notas — Ver tus notas guardadas\n"
         "• /voz — Activar/desactivar respuestas en audio\n"
         "• /perfil — Ver y cambiar tu configuración\n"
         "• /sugerencias — Patrones detectados y consejos\n"
@@ -135,7 +135,8 @@ async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "_'Agéndame una junta el martes a las 3 PM'_\n"
         "_'Cancela mi cita del viernes'_\n"
         "_'¿Tengo algo pendiente para mañana?'_\n"
-        "_'Hazme un reporte de la semana'_"
+        "_'Anota que el wifi es CAMSA2024'_\n"
+        "_'Busca mi nota del wifi'_"
     )
     await update.effective_message.reply_text(text, parse_mode="Markdown")
 
@@ -267,6 +268,63 @@ async def cmd_semana(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# /notas — Listado de notas guardadas
+# ---------------------------------------------------------------------------
+async def cmd_notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        notes = (
+            db.query(Note)
+            .filter(Note.user_telegram_id == user_id, Note.archived == False)
+            .order_by(Note.created_at.desc())
+            .limit(10)
+            .all()
+        )
+    finally:
+        db.close()
+
+    if not notes:
+        await update.effective_message.reply_text(
+            "📭 No tienes notas guardadas todavía.\n\n"
+            "Para guardar una nota dime algo como:\n"
+            "_'Anota que el wifi es CAMSA2024'_\n"
+            "_'Guarda esto: Pedro me debe 500'_",
+            parse_mode="Markdown",
+        )
+        return
+
+    cat_emoji = {
+        "personal": "🏠", "trabajo": "💼", "salud": "❤️",
+        "finanzas": "💰", "familia": "👨‍👩‍👧", "social": "🎉", "otros": "📌",
+    }
+
+    await update.effective_message.reply_text(
+        f"📝 *Tus notas* — últimas {len(notes)}",
+        parse_mode="Markdown",
+    )
+
+    for n in notes:
+        cat  = cat_emoji.get(n.category or "otros", "📌")
+        body = (n.content or "").strip()
+        # Truncar contenido largo
+        if len(body) > 500:
+            body = body[:497] + "..."
+        text = f"{cat} *{n.title}*\n_ID: {n.id}_\n\n{body}"
+        if n.tags:
+            text += f"\n\n🏷️ _{n.tags}_"
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✏️ Editar",   callback_data=f"editnote:{n.id}"),
+            InlineKeyboardButton("⏰ Recordar", callback_data=f"remindnote:{n.id}"),
+            InlineKeyboardButton("🗑️ Borrar",  callback_data=f"deletenote:{n.id}"),
+        ]])
+        await update.effective_message.reply_text(
+            text, parse_mode="Markdown", reply_markup=keyboard,
+        )
+
+
+# ---------------------------------------------------------------------------
 # /reporte — Reporte de productividad con opciones
 # ---------------------------------------------------------------------------
 async def cmd_reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -358,8 +416,10 @@ async def cmd_sugerencias(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /cancelar — Salir del modo edición (o cualquier flujo conversacional)
 # ---------------------------------------------------------------------------
 async def cmd_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    had_edit = context.user_data.pop("editing_event_id", None)
-    if had_edit:
+    had_edit_event = context.user_data.pop("editing_event_id", None)
+    had_edit_note  = context.user_data.pop("editing_note_id", None)
+    had_remind     = context.user_data.pop("reminding_note_id", None)
+    if had_edit_event or had_edit_note or had_remind:
         await update.effective_message.reply_text("✅ Cancelé el modo edición.")
     else:
         await update.effective_message.reply_text("No hay nada que cancelar.")
@@ -440,11 +500,32 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── Modo edición de evento ────────────────────────────────
     editing_id = context.user_data.pop("editing_event_id", None)
+    editing_note_id = context.user_data.pop("editing_note_id", None)
+    reminding_note_id = context.user_data.pop("reminding_note_id", None)
+
     if editing_id:
         edit_prompt = (
             f"El usuario quiere editar el evento con event_id={editing_id}. "
             f"Su instrucción es: '{user_text}'. "
             f"Llama update_event con event_id={editing_id} y los campos que correspondan."
+        )
+        response = process_message(edit_prompt, user_id, db, timezone=user.timezone or "America/Mexico_City")
+    elif editing_note_id:
+        edit_prompt = (
+            f"El usuario quiere editar la nota con note_id={editing_note_id}. "
+            f"Su instrucción es: '{user_text}'. "
+            f"Llama update_note con note_id={editing_note_id} y los campos que correspondan."
+        )
+        response = process_message(edit_prompt, user_id, db, timezone=user.timezone or "America/Mexico_City")
+    elif reminding_note_id:
+        # El usuario eligio "Recordar" en una nota desde /notas y ahora dice la hora.
+        # Damos al LLM el contexto exacto para que llame create_note_reminder.
+        edit_prompt = (
+            f"El usuario quiere que le recuerdes la nota con note_id={reminding_note_id} "
+            f"a la hora que indica: '{user_text}'. "
+            f"Calcula start_datetime en hora local del usuario (formato ISO 8601 sin "
+            f"timezone) y llama a create_note_reminder con note_id={reminding_note_id} "
+            f"y start_datetime correspondiente."
         )
         response = process_message(edit_prompt, user_id, db, timezone=user.timezone or "America/Mexico_City")
     else:
@@ -522,6 +603,58 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text(text, parse_mode="Markdown")
             else:
                 await query.message.reply_text("⚠️ No pude recuperar el texto (el bot se reinició desde que recibiste este audio).")
+            return
+
+        # --- Editar nota (modo conversacional) ---
+        if data.startswith("editnote:"):
+            note_id = int(data.split(":")[1])
+            note = db.query(Note).filter(Note.id == note_id, Note.user_telegram_id == user_id).first()
+            if not note:
+                await query.message.reply_text("❌ Esa nota ya no existe.")
+                return
+            context.user_data["editing_note_id"] = note_id
+            await query.message.reply_text(
+                f"✏️ Editando nota *{note.title}*\n\n"
+                "Dime qué quieres cambiar en lenguaje natural. Ejemplos:\n"
+                "• _'cambia el contenido a: la nueva contraseña es...'_\n"
+                "• _'cambia el título a Datos del wifi'_\n"
+                "• _'cambia la categoría a trabajo'_\n\n"
+                "Escribe /cancelar para salir del modo edición.",
+                parse_mode="Markdown",
+            )
+            return
+
+        # --- Programar recordatorio para una nota ---
+        if data.startswith("remindnote:"):
+            note_id = int(data.split(":")[1])
+            note = db.query(Note).filter(Note.id == note_id, Note.user_telegram_id == user_id).first()
+            if not note:
+                await query.message.reply_text("❌ Esa nota ya no existe.")
+                return
+            context.user_data["reminding_note_id"] = note_id
+            await query.message.reply_text(
+                f"⏰ ¿Cuándo quieres que te recuerde la nota *{note.title}*?\n\n"
+                "Dímelo en lenguaje natural. Ejemplos:\n"
+                "• _'a las 5 PM'_\n"
+                "• _'en 2 horas'_\n"
+                "• _'mañana a las 10'_\n\n"
+                "Escribe /cancelar para salir.",
+                parse_mode="Markdown",
+            )
+            return
+
+        # --- Borrar nota (archivar) ---
+        if data.startswith("deletenote:"):
+            note_id = int(data.split(":")[1])
+            note = db.query(Note).filter(Note.id == note_id, Note.user_telegram_id == user_id).first()
+            if note:
+                note.archived = True
+                db.commit()
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(
+                    f"🗑️ Nota *{note.title}* eliminada.",
+                    parse_mode="Markdown",
+                )
             return
 
         # --- Editar evento (modo conversacional) ---
@@ -673,6 +806,7 @@ def main():
     app.add_handler(CommandHandler("ayuda",   cmd_ayuda))
     app.add_handler(CommandHandler("agenda",  cmd_agenda))
     app.add_handler(CommandHandler("semana",  cmd_semana))
+    app.add_handler(CommandHandler("notas",   cmd_notas))
     app.add_handler(CommandHandler("reporte", cmd_reporte))
     app.add_handler(CommandHandler("voz",         cmd_voz))
     app.add_handler(CommandHandler("perfil",      cmd_perfil))

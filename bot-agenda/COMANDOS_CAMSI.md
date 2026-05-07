@@ -31,6 +31,12 @@ Muestra los eventos pendientes que tienes para **hoy**. Cada evento aparece como
 ### `/semana`
 Lista compacta de tus eventos pendientes de los **proximos 7 dias**, ordenados por fecha. Pensado para ver de un vistazo lo que viene.
 
+### `/notas`
+Muestra tus **notas guardadas** (las ultimas 10). Cada nota tiene tres botones:
+- ✏️ Editar — modo conversacional para cambiar titulo, contenido o categoria
+- ⏰ Recordar — programa un recordatorio sobre la nota a la hora que digas
+- 🗑️ Borrar — elimina la nota
+
 ### `/voz`
 Activa o desactiva las **respuestas de voz**. Cuando esta activado, CAMSI te contesta con un audio (mas un boton "Ver texto" para leer la transcripcion). Cuando esta desactivado, solo responde con texto.
 
@@ -60,7 +66,8 @@ CAMSI entiende texto libre y notas de voz. Puedes decirle directamente lo que qu
 
 ### Ejemplos de uso libre
 
-- *"Recuerdame en 10 minutos tomar agua"* → crea un recordatorio puntual
+**Eventos (agenda):**
+- *"Recuerdame en 10 minutos tomar agua"* → recordatorio puntual
 - *"Recuerdame cada 20 minutos tomar agua"* → recordatorio recurrente
 - *"Agendame una junta el martes a las 3 PM en Sala 3"* → crea una cita
 - *"Cada dia 7 del mes pagar internet"* → recordatorio mensual
@@ -69,6 +76,20 @@ CAMSI entiende texto libre y notas de voz. Puedes decirle directamente lo que qu
 - *"Cancela mi cita del viernes"* → cancela un evento
 - *"Reagenda la junta de las 3 para las 5"* → modifica un evento existente
 - *"Marca como hecha la tarea de pagar internet"* → completa un evento
+
+**Notas (informacion guardada):**
+- *"Anota que el wifi de la oficina es CAMSA2024"* → guarda una nota
+- *"Guarda esto: Pedro me debe 500 desde el viernes"* → guarda una nota
+- *"¿Que notas tengo?"* → lista tus notas
+- *"Busca mi nota del wifi"* → busca por palabras clave
+- *"Notas de trabajo"* → filtra por categoria
+- *"Recuerdame mi nota del wifi a las 5 PM"* → programa un recordatorio sobre una nota
+- *"Borra la nota de Pedro"* → elimina una nota
+
+**Caso especial — ambiguedad:**
+Si dices *"recuerdame que [info]"* SIN especificar tiempo, CAMSI te preguntara
+si quieres guardarlo como **nota** o como **recordatorio**. Si eliges
+recordatorio, tendras que decir cuando.
 
 ### Notas de voz
 

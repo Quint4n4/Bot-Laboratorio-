@@ -44,6 +44,20 @@ class Event(Base):
     attendees        = Column(Text, nullable=True)
     tags             = Column(String, nullable=True)
     category         = Column(String, default="otros")
+    note_id          = Column(Integer, nullable=True)
+    created_at       = Column(DateTime)
+    updated_at       = Column(DateTime)
+
+
+class Note(Base):
+    __tablename__ = "notes"
+    id               = Column(Integer, primary_key=True)
+    user_telegram_id = Column(String, nullable=False)
+    title            = Column(String, nullable=False)
+    content          = Column(Text,   nullable=False)
+    category         = Column(String, default="otros")
+    tags             = Column(String, nullable=True)
+    archived         = Column(Boolean, default=False)
     created_at       = Column(DateTime)
     updated_at       = Column(DateTime)
 

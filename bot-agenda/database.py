@@ -78,6 +78,34 @@ class Event(Base):
     created_at       = Column(DateTime, default=datetime.utcnow)
     updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Recordatorio vinculado a una nota: si esta poblado, al disparar el
+    # evento mostramos el contenido de la nota (no el title del evento) y
+    # marcamos como completed sin tocar la nota.
+    note_id          = Column(Integer, nullable=True, index=True)
+
+
+class Note(Base):
+    """
+    Notas persistentes del usuario.
+
+    A diferencia de un Event, una Note no tiene fecha de aviso: es informacion
+    que el usuario quiere guardar para consultar despues (wifi, datos de
+    contacto, ideas sueltas, etc.). Una nota puede tener un Event asociado
+    (recordatorio) que apunte a ella mediante Event.note_id; cuando ese evento
+    se dispara, se le manda al usuario el contenido de la nota.
+    """
+    __tablename__ = "notes"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    user_telegram_id = Column(String, nullable=False, index=True)
+    title            = Column(String, nullable=False)              # corto, ~5 palabras
+    content          = Column(Text,   nullable=False)              # texto libre
+    category         = Column(String, default="otros")             # mismas categorias que events
+    tags             = Column(String, nullable=True)               # CSV de palabras clave
+    archived         = Column(Boolean, default=False, index=True)  # ocultar sin borrar
+    created_at       = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 class Message(Base):
     """Historial conversacional por usuario para memoria multi-turno de CAMSI."""
@@ -102,6 +130,7 @@ def _migrate_event_columns():
         ("attendees",       "TEXT"),
         ("tags",            "VARCHAR"),
         ("category",        "VARCHAR DEFAULT 'otros'"),
+        ("note_id",         "INTEGER"),  # FK opcional a notes
     ]
 
     if "sqlite" in DATABASE_URL:

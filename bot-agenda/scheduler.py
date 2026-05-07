@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.orm import Session
 
-from database import Event, User, EventStatus, SessionLocal
+from database import Event, User, EventStatus, SessionLocal, Note
 from pdf_generator import generate_daily_briefing, generate_evening_wrapup
 from recurrence import next_occurrence
 
@@ -79,10 +79,20 @@ async def check_due_reminders():
             if not user:
                 continue
 
-            tipo_icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(event.event_type, "📌")
-            text = f"{tipo_icon} *Recordatorio:* {event.title}"
-            if event.description:
-                text += f"\n_{event.description}_"
+            # ── Recordatorio de nota ─────────────────────────────────
+            # Si el evento esta vinculado a una nota, mostramos el contenido
+            # de la nota en lugar del title del evento. La nota persiste.
+            note_obj = None
+            if event.note_id:
+                note_obj = db.query(Note).filter(Note.id == event.note_id).first()
+
+            if note_obj:
+                text = f"📝 *Te recuerdo tu nota:*\n*{note_obj.title}*\n\n{note_obj.content}"
+            else:
+                tipo_icon = {"reminder": "⏰", "meeting": "📅", "task": "✅"}.get(event.event_type, "📌")
+                text = f"{tipo_icon} *Recordatorio:* {event.title}"
+                if event.description:
+                    text += f"\n_{event.description}_"
 
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
             # Botones distintos segun si el evento es recurrente o one-shot.
@@ -110,7 +120,10 @@ async def check_due_reminders():
 
             if user.voice_replies:
                 from voice_handler import text_to_speech
-                speech_text = f"Recordatorio: {event.title}."
+                if note_obj:
+                    speech_text = f"Te recuerdo tu nota: {note_obj.title}. {note_obj.content}"
+                else:
+                    speech_text = f"Recordatorio: {event.title}."
                 audio_path = await text_to_speech(
                     speech_text,
                     voice=user.voice_persona or "nova",

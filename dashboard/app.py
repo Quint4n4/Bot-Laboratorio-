@@ -46,8 +46,9 @@ if not telegram_id:
 # ── Navegación ───────────────────────────────────────────────────
 home           = st.Page("pages/home.py",           title="Inicio",         default=True)
 agenda         = st.Page("pages/agenda.py",         title="Agenda")
+notas          = st.Page("pages/notas.py",          title="Notas")
 completados    = st.Page("pages/completados.py",    title="Completados")
 conversaciones = st.Page("pages/conversaciones.py", title="Conversaciones")
 
-pg = st.navigation([home, agenda, completados, conversaciones], position="sidebar")
+pg = st.navigation([home, agenda, notas, completados, conversaciones], position="sidebar")
 pg.run()
