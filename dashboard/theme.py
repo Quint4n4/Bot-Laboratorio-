@@ -373,6 +373,131 @@ hr {
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   RESPONSIVE — Movil
+   ════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    /* Container principal con menos padding en movil */
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 3rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+
+    /* Tipografia mas chica para que entre */
+    h1 {
+        font-size: 1.9rem !important;
+        line-height: 1.15;
+    }
+    h2 {
+        font-size: 1.25rem !important;
+        margin-top: 1.5rem !important;
+    }
+
+    /* KPI cards: una columna en lugar de 4 */
+    .kpi-card {
+        padding: 16px 18px;
+        margin-bottom: 8px;
+    }
+    .kpi-value {
+        font-size: 28px;
+    }
+    .kpi-label {
+        font-size: 10px;
+    }
+
+    /* Cards de eventos / notas mas compactos */
+    .event-card {
+        padding: 14px 16px;
+    }
+    .event-title {
+        font-size: 15px;
+    }
+
+    /* Sidebar: comportamiento de drawer (overlay) en movil */
+    [data-testid="stSidebar"] {
+        width: 80vw !important;
+        max-width: 320px !important;
+        background: #FFFFFF !important;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15) !important;
+        border-right: 1px solid #E5E5E5 !important;
+    }
+
+    /* Cuando esta colapsado, ocultarlo completo (no dejar barra rara) */
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        margin-left: -100% !important;
+    }
+
+    /* Toggle del sidebar mas grande y visible (44x44 minimo para touch) */
+    [data-testid="collapsedControl"],
+    button[kind="header"] {
+        position: fixed !important;
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        z-index: 999 !important;
+        background: #FFFFFF !important;
+        border: 1px solid #E5E5E5 !important;
+        border-radius: 10px !important;
+        padding: 8px !important;
+        width: 44px !important;
+        height: 44px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* El boton de cerrar el sidebar (X) tambien grande */
+    [data-testid="stSidebar"] button[kind="header"] {
+        width: 44px !important;
+        height: 44px !important;
+    }
+
+    /* Espaciado superior en el contenido principal para que el toggle no tape */
+    section[data-testid="stMain"] .block-container {
+        padding-top: 3.5rem !important;
+    }
+
+    /* Forms y selects con altura adecuada para touch */
+    .stTextInput input,
+    .stTextArea textarea,
+    .stSelectbox > div,
+    .stDateInput input,
+    .stTimeInput input {
+        font-size: 16px !important; /* Evita que iOS haga zoom al focus */
+        padding: 10px 12px !important;
+    }
+
+    /* Botones primarios mas grandes en movil */
+    .stButton button {
+        padding: 12px 18px !important;
+        font-size: 15px !important;
+        min-height: 44px !important;
+    }
+
+    /* Tabs sin padding lateral excesivo */
+    .stTabs [data-baseweb="tab-list"] {
+        overflow-x: auto;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Expanders (categorias) un poco mas compactos */
+    [data-testid="stExpander"] summary {
+        padding: 12px 14px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* Celulares muy pequenos */
+@media (max-width: 480px) {
+    h1 { font-size: 1.6rem !important; }
+    h2 { font-size: 1.1rem !important; }
+    .kpi-value { font-size: 24px; }
+    .block-container {
+        padding-left: 0.7rem !important;
+        padding-right: 0.7rem !important;
+    }
+}
 </style>
 """
 
