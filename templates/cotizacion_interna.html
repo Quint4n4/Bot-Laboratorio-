@@ -113,6 +113,50 @@
 
         .text-right { text-align: right; }
 
+        /* Resaltar precios cobrados cuando difieren del original */
+        .precio-modificado {
+            color: #16A34A;
+            font-weight: bold;
+            background: #F0FDF4;
+            border-radius: 4px;
+        }
+
+        /* Resumen final con descuento */
+        .resumen-final {
+            margin-top: 18px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .resumen-caja {
+            min-width: 320px;
+            border: 1.5px solid #132454;
+            border-radius: 8px;
+            padding: 14px 18px;
+            background: #F8FAFD;
+        }
+        .resumen-fila {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 11pt;
+            color: #333;
+        }
+        .resumen-fila.descuento { color: #16A34A; font-weight: bold; }
+        .resumen-fila.total-final {
+            border-top: 2px solid #132454;
+            margin-top: 6px;
+            padding-top: 10px;
+            font-size: 13pt;
+            font-weight: bold;
+            color: #132454;
+        }
+        .nota-modificados {
+            font-size: 9pt;
+            color: #16A34A;
+            font-style: italic;
+            margin-top: 8px;
+        }
+
         .footer-bar {
             display: flex;
             justify-content: space-between;
@@ -231,9 +275,10 @@
         <thead>
             <tr>
                 <th>Estudio / Análisis</th>
-                <th class="text-right" style="width:110px;">Sin IVA</th>
-                <th class="text-right" style="width:110px;">Con IVA</th>
-                <th class="text-right" style="width:110px;">Máx Sugerido</th>
+                <th class="text-right" style="width:90px;">Sin IVA</th>
+                <th class="text-right" style="width:90px;">Con IVA</th>
+                <th class="text-right" style="width:110px;">Precio Original</th>
+                <th class="text-right" style="width:110px;">Precio Cobrado</th>
             </tr>
         </thead>
         <tbody>
@@ -247,17 +292,49 @@
                 </td>
                 <td class="text-right">${{ item.precio_sin_iva }}</td>
                 <td class="text-right">${{ item.precio_con_iva }}</td>
-                <td class="text-right">${{ item.precio }}</td>
+                <td class="text-right">${{ item.precio_original }}</td>
+                <td class="text-right {% if item.precio_modificado %}precio-modificado{% endif %}">
+                    ${{ item.precio }}{% if item.precio_modificado %} *{% endif %}
+                </td>
             </tr>
             {% endfor %}
             <tr class="total-row">
-                <td class="text-right" style="font-size: 13pt;">TOTAL:</td>
-                <td class="text-right" style="font-size: 13pt;">${{ total_sin_iva }}</td>
-                <td class="text-right" style="font-size: 13pt;">${{ total_con_iva }}</td>
-                <td class="text-right" style="font-size: 13pt;">${{ total_max_sug }}</td>
+                <td class="text-right" style="font-size: 12pt;">SUBTOTALES:</td>
+                <td class="text-right" style="font-size: 12pt;">${{ total_sin_iva }}</td>
+                <td class="text-right" style="font-size: 12pt;">${{ total_con_iva }}</td>
+                <td class="text-right" style="font-size: 12pt;">${{ subtotal_original }}</td>
+                <td class="text-right" style="font-size: 12pt;">${{ subtotal }}</td>
             </tr>
         </tbody>
     </table>
+
+    {# Resumen final con descuento global y total cobrado al paciente #}
+    <div class="resumen-final">
+        <div class="resumen-caja">
+            <div class="resumen-fila">
+                <span>Subtotal cobrado:</span>
+                <span>${{ subtotal }}</span>
+            </div>
+            {% if tiene_descuento %}
+            <div class="resumen-fila descuento">
+                <span>Descuento aplicado:</span>
+                <span>-${{ descuento }}</span>
+            </div>
+            {% endif %}
+            <div class="resumen-fila total-final">
+                <span>TOTAL FINAL AL PACIENTE:</span>
+                <span>${{ total_final }}</span>
+            </div>
+        </div>
+    </div>
+
+    {# Nota de simbología si hubo precios modificados #}
+    {% set hay_modificados = items | selectattr("precio_modificado") | list %}
+    {% if hay_modificados %}
+    <div class="nota-modificados">
+        * Precio modificado por el operador respecto al catálogo original.
+    </div>
+    {% endif %}
 
     <div class="footer-bar">
         <div class="left">Reporte confidencial de costos de estudio interno.</div>

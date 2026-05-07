@@ -327,14 +327,25 @@ td:last-child { text-align: center; }
     <!-- Totales -->
     <div class="totales">
       <div class="totales-caja">
+        {% if tiene_descuento %}
         <div class="subtotal-fila">
           <span>SUBTOTAL:</span>
-          <span>${{ total }}</span>
+          <span>${{ subtotal }}</span>
+        </div>
+        <div class="subtotal-fila" style="color:#16A34A;">
+          <span>DESCUENTO:</span>
+          <span>-${{ descuento }}</span>
         </div>
         <div class="total-fila">
           <span>TOTAL:</span>
-          <span>${{ total }}</span>
+          <span>${{ total_final }}</span>
         </div>
+        {% else %}
+        <div class="total-fila">
+          <span>TOTAL:</span>
+          <span>${{ total_final }}</span>
+        </div>
+        {% endif %}
       </div>
     </div>
 

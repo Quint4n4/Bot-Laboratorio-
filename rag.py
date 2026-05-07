@@ -175,13 +175,14 @@ def generate_rag_response(query: str) -> dict:
             entry = CATALOG_DICT.get(nombre)
             if entry and entry["precio_max"] > 0:
                 cotizacion.append({
-                    "estudio":        nombre,
-                    "precio":         entry["precio_max"],
-                    "precio_min":     entry["precio_min"],
-                    "precio_sin_iva": entry["precio_sin_iva"],
-                    "precio_con_iva": entry["precio_con_iva"],
-                    "recomendacion":  entry["muestra"],
-                    "tiempo":         entry.get("tiempo", "2-8 horas"),
+                    "estudio":          nombre,
+                    "precio":           entry["precio_max"],   # precio cobrado actual (modificable por el operador)
+                    "precio_original":  entry["precio_max"],   # precio del catalogo (inmutable, para reporte interno)
+                    "precio_min":       entry["precio_min"],
+                    "precio_sin_iva":   entry["precio_sin_iva"],
+                    "precio_con_iva":   entry["precio_con_iva"],
+                    "recomendacion":    entry["muestra"],
+                    "tiempo":           entry.get("tiempo", "2-8 horas"),
                 })
             else:
                 # Nombre que GPT devolvió pero no existe en el índice
@@ -216,32 +217,56 @@ def generate_rag_response(query: str) -> dict:
 
 # ─────────────────────────────────────────────────────────────
 # Parser de cambios de precio
-# Devuelve {intent: confirm|change|unclear, estudio_idx, nuevo_precio}
+# Reconoce 5 intenciones:
+#   - confirm: el usuario aprueba la cotizacion tal cual
+#   - change_item: cambia el precio de un estudio puntual
+#   - change_total: define un total final (descuento implicito)
+#   - discount_amount: aplica descuento de un monto fijo
+#   - discount_percent: aplica descuento porcentual
+#   - unclear: no se entendio
 # ─────────────────────────────────────────────────────────────
 def parse_price_change(message: str, cotizacion: list) -> dict:
     lista_txt = "\n".join(
         f"{i+1}. {c['estudio']} - ${c['precio']:.2f}"
         for i, c in enumerate(cotizacion)
     )
-    prompt = f"""El usuario está revisando los precios de una cotización médica.
-Lista actual:
+    subtotal = sum(float(c["precio"]) for c in cotizacion)
+    prompt = f"""El usuario está revisando los precios de una cotización médica de laboratorio.
+Lista actual de estudios y precios cobrados:
 {lista_txt}
+
+Subtotal actual: ${subtotal:.2f}
 
 El usuario respondió: "{message}"
 
-Determina si está confirmando, pidiendo cambiar un precio, o algo poco claro.
-
-Responde SOLO con JSON:
+Determina su intención. Responde SOLO con JSON:
 {{
-  "intent": "confirm" | "change" | "unclear",
-  "estudio_idx": 0-based index si intent=change, sino null,
-  "nuevo_precio": número decimal sin signo $ si intent=change, sino null
+  "intent": "confirm" | "change_item" | "change_total" | "discount_amount" | "discount_percent" | "unclear",
+  "estudio_idx": 0-based index si intent=change_item, sino null,
+  "nuevo_precio": número decimal sin signo $ si intent=change_item, sino null,
+  "nuevo_total": número decimal sin signo $ si intent=change_total, sino null,
+  "monto_descuento": número decimal positivo si intent=discount_amount, sino null,
+  "porcentaje_descuento": número entre 0 y 100 si intent=discount_percent, sino null
 }}
 
-Reglas:
-- intent=confirm si dice si/sí/ok/correcto/listo/dale/adelante/perfecto/asi esta bien.
-- intent=change si menciona un estudio (por nombre o número) y un nuevo precio.
+Reglas (en orden de prioridad):
+- intent=confirm si dice algo como: si/sí/ok/correcto/listo/dale/adelante/perfecto/así está bien/aprobado.
+- intent=change_item si menciona UN estudio (por nombre o número) y UN nuevo precio.
+  Ejemplos: "cambia biometría a 250", "el estudio 2 vale 300", "biometría 250".
+- intent=change_total si menciona el TOTAL/total/final/precio total y un nuevo monto.
+  Ejemplos: "el total será 1500", "cambia el total a 1200", "deja todo en 1000",
+  "que el total quede en 1500", "total: 1500", "precio final 1500".
+- intent=discount_amount si pide aplicar un descuento como cantidad fija.
+  Ejemplos: "aplica un descuento de 200", "200 de descuento", "menos 200",
+  "hazle 100 menos", "réstale 150", "descuéntale 300".
+- intent=discount_percent si pide un descuento en porcentaje.
+  Ejemplos: "10% de descuento", "descuento del 15%", "hazle el 20% menos",
+  "aplica 10 por ciento", "descuéntale 5%".
 - intent=unclear si no encaja en lo anterior.
+
+IMPORTANTE: Diferencia bien entre "el estudio X vale 200" (change_item) y
+"el total es 200" (change_total). Si el usuario dice solo "200" sin contexto,
+es unclear.
 """
     try:
         resp = client.chat.completions.create(
@@ -250,7 +275,21 @@ Reglas:
             temperature=0,
             response_format={"type": "json_object"},
         )
-        return json.loads(resp.choices[0].message.content)
+        result = json.loads(resp.choices[0].message.content)
+        # Normalizar: asegurar que todos los campos esten presentes para downstream
+        result.setdefault("estudio_idx", None)
+        result.setdefault("nuevo_precio", None)
+        result.setdefault("nuevo_total", None)
+        result.setdefault("monto_descuento", None)
+        result.setdefault("porcentaje_descuento", None)
+        return result
     except Exception as e:
         print("parse_price_change error:", e)
-        return {"intent": "unclear", "estudio_idx": None, "nuevo_precio": None}
+        return {
+            "intent": "unclear",
+            "estudio_idx": None,
+            "nuevo_precio": None,
+            "nuevo_total": None,
+            "monto_descuento": None,
+            "porcentaje_descuento": None,
+        }

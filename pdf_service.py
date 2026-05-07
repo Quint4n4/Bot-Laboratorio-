@@ -191,42 +191,47 @@ async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: st
     
     # 4. Preparar items + recomendaciones de preparación
     lista_cotizacion = ia_json.get("cotizacion", [])
-    
-    # Si es interno, calculamos basado en total_min (costo maquila)
-    if is_internal:
-        total_monto = ia_json.get("total_min", ia_json.get("total", 0))
-    else:
-        total_monto = ia_json.get("total", 0)
-        
+
     items = []
-    subtotal = 0.0
+    subtotal = 0.0          # suma de precios cobrados
     total_sin_iva = 0.0
     total_con_iva = 0.0
-    total_max_sug = 0.0
+    subtotal_original = 0.0  # suma de precios originales (catalogo) — solo para reporte interno
     for c in lista_cotizacion:
         nombre = c.get("estudio", c.get("nombre", "Estudio Desconocido"))
 
-        precio = float(c.get("precio", 0))
-        precio_sin_iva = float(c.get("precio_sin_iva", 0))
-        precio_con_iva = float(c.get("precio_con_iva", 0))
+        precio          = float(c.get("precio", 0))
+        precio_original = float(c.get("precio_original", precio))  # default = igual al cobrado
+        precio_sin_iva  = float(c.get("precio_sin_iva", 0))
+        precio_con_iva  = float(c.get("precio_con_iva", 0))
+
+        # Indicador para el template: ¿este estudio tuvo cambio de precio?
+        precio_modificado = abs(precio - precio_original) > 0.005
 
         recomendacion = c.get("recomendacion", "")
         tiempo = c.get("tiempo", "") or "2-8 horas"
         preparacion = _get_preparacion(nombre)
 
         items.append({
-            "nombre":         nombre,
-            "precio":         f"{precio:.2f}",
-            "precio_sin_iva": f"{precio_sin_iva:.2f}",
-            "precio_con_iva": f"{precio_con_iva:.2f}",
-            "recomendacion":  recomendacion,
-            "tiempo":         tiempo,
-            "preparacion":    preparacion,
+            "nombre":              nombre,
+            "precio":              f"{precio:.2f}",
+            "precio_original":     f"{precio_original:.2f}",
+            "precio_modificado":   precio_modificado,
+            "precio_sin_iva":      f"{precio_sin_iva:.2f}",
+            "precio_con_iva":      f"{precio_con_iva:.2f}",
+            "recomendacion":       recomendacion,
+            "tiempo":              tiempo,
+            "preparacion":         preparacion,
         })
-        subtotal      += precio
-        total_sin_iva += precio_sin_iva
-        total_con_iva += precio_con_iva
-        total_max_sug += precio
+        subtotal          += precio
+        total_sin_iva     += precio_sin_iva
+        total_con_iva     += precio_con_iva
+        subtotal_original += precio_original
+
+    # Descuento global y total final (cobrado al paciente)
+    descuento_global = float(ia_json.get("descuento", 0))
+    total_final      = float(ia_json.get("total_final", subtotal))
+    tiene_descuento  = descuento_global > 0.005
 
     # 5. Renderizar HTML
     rendered_html = template.render(
@@ -234,10 +239,20 @@ async def create_quote_pdf(ia_json: dict, patient_name: str, output_filename: st
         fecha=fecha_formateada,
         paciente_nombre=patient_name,
         items=items,
+        # Subtotal de precios cobrados (puede tener cambios individuales)
         total=f"{subtotal:.2f}",
+        subtotal=f"{subtotal:.2f}",
+        # Suma de precios originales del catalogo (solo se usa en reporte interno)
+        subtotal_original=f"{subtotal_original:.2f}",
+        # Descuento global y total final (despues del descuento)
+        descuento=f"{descuento_global:.2f}",
+        total_final=f"{total_final:.2f}",
+        tiene_descuento=tiene_descuento,
+        # Sin IVA / Con IVA agregados (reporte interno)
         total_sin_iva=f"{total_sin_iva:.2f}",
         total_con_iva=f"{total_con_iva:.2f}",
-        total_max_sug=f"{total_max_sug:.2f}",
+        # Compatibilidad hacia atras: total_max_sug = subtotal de precios cobrados
+        total_max_sug=f"{subtotal:.2f}",
     )
     
     # 6. Generar PDF con Playwright

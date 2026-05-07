@@ -47,6 +47,22 @@ def _calcular_total(cotizacion: list) -> float:
 def _calcular_total_min(cotizacion: list) -> float:
     return sum(float(c.get("precio_min", c.get("precio", 0))) for c in cotizacion)
 
+def _recalc_totales(ia_json: dict) -> None:
+    """
+    Recalcula subtotal/total_final/descuento despues de un cambio de precio
+    individual. Mantiene el descuento absoluto si ya estaba aplicado.
+    Si no hay descuento previo, total_final = subtotal.
+    """
+    cot = ia_json.get("cotizacion", [])
+    subtotal  = sum(float(c.get("precio", 0)) for c in cot)
+    descuento = float(ia_json.get("descuento", 0))
+    # Si el descuento previo era mayor que el nuevo subtotal, reajustar a 0
+    if descuento >= subtotal:
+        descuento = 0.0
+    ia_json["total"]       = subtotal
+    ia_json["descuento"]   = descuento
+    ia_json["total_final"] = max(0.0, subtotal - descuento)
+
 async def _pedir_nombre(update: Update, cotizacion: list) -> int:
     """Guarda ia_json final y pide el nombre del paciente."""
     return ESPERANDO_NOMBRE
@@ -74,13 +90,34 @@ async def _enviar_lista_precios(update: Update, context: ContextTypes.DEFAULT_TY
 
     lineas = ["📋 *Revisa los precios antes de generar el PDF:*\n"]
     for i, c in enumerate(cot, 1):
-        lineas.append(f"{i}. *{c['estudio']}* — ${float(c['precio']):.2f}")
-    total = sum(float(c["precio"]) for c in cot)
-    lineas.append(f"\n💰 *Total: ${total:.2f}*")
+        precio_actual = float(c['precio'])
+        precio_orig   = float(c.get('precio_original', precio_actual))
+        # Si el precio cobrado difiere del original, mostrar ambos
+        if abs(precio_actual - precio_orig) > 0.005:
+            lineas.append(
+                f"{i}. *{c['estudio']}* — ${precio_actual:.2f}  "
+                f"_(original: ${precio_orig:.2f})_"
+            )
+        else:
+            lineas.append(f"{i}. *{c['estudio']}* — ${precio_actual:.2f}")
+
+    subtotal    = sum(float(c["precio"]) for c in cot)
+    descuento   = float(ia_json.get("descuento", 0))
+    total_final = float(ia_json.get("total_final", subtotal))
+
+    if descuento > 0.005:
+        lineas.append(f"\n*Subtotal:* ${subtotal:.2f}")
+        lineas.append(f"*Descuento:* -${descuento:.2f}")
+        lineas.append(f"💰 *Total final: ${total_final:.2f}*")
+    else:
+        lineas.append(f"\n💰 *Total: ${total_final:.2f}*")
+
     lineas.append("")
-    lineas.append("¿Los precios están bien?")
-    lineas.append("• Responde *Sí / OK / Correcto* para continuar")
-    lineas.append("• O escribe el cambio (ej: _\"cambia biometría a 250\"_)")
+    lineas.append("¿Está bien la cotización?")
+    lineas.append("• *Sí / OK / Correcto* para continuar")
+    lineas.append("• Cambiar un estudio: _\"cambia biometría a 250\"_")
+    lineas.append("• Cambiar el total: _\"el total será 1500\"_")
+    lineas.append("• Aplicar descuento: _\"descuento de 200\"_ o _\"10% de descuento\"_")
     await update.message.reply_text("\n".join(lineas), parse_mode="Markdown")
     return ESPERANDO_CONFIRMACION_PRECIOS
 
@@ -401,9 +438,8 @@ async def handle_confirmacion_precios(update: Update, context: ContextTypes.DEFA
         )
 
         intent = parsed.get("intent")
-        idx = parsed.get("estudio_idx")
-        nuevo = parsed.get("nuevo_precio")
 
+        # ── Confirmar tal cual ─────────────────────────────────────
         if intent == "confirm":
             await update.message.reply_text(
                 "📝 Por favor escríbeme el *NOMBRE COMPLETO DEL PACIENTE* para generar el PDF:",
@@ -411,22 +447,97 @@ async def handle_confirmacion_precios(update: Update, context: ContextTypes.DEFA
             )
             return ESPERANDO_NOMBRE
 
-        if intent == "change" and idx is not None and nuevo is not None and 0 <= idx < len(cotizacion):
-            anterior = float(cotizacion[idx]["precio"])
-            cotizacion[idx]["precio"] = float(nuevo)
-            ia_json["total"] = sum(float(c["precio"]) for c in cotizacion)
-            context.user_data["ia_json"] = ia_json
-            await update.message.reply_text(
-                f"✏️ *{cotizacion[idx]['estudio']}*: ${anterior:.2f} → ${float(nuevo):.2f}",
-                parse_mode="Markdown",
-            )
-            return await _enviar_lista_precios(update, context)
+        # ── Cambiar el precio de un estudio individual ─────────────
+        # (incluye el alias "change" por compatibilidad con respuestas viejas)
+        if intent in ("change_item", "change"):
+            idx = parsed.get("estudio_idx")
+            nuevo = parsed.get("nuevo_precio")
+            if idx is not None and nuevo is not None and 0 <= idx < len(cotizacion):
+                anterior = float(cotizacion[idx]["precio"])
+                cotizacion[idx]["precio"] = float(nuevo)
+                ia_json["total"] = sum(float(c["precio"]) for c in cotizacion)
+                # Si habia un descuento absoluto previo, recalcular total_final
+                # respetando el descuento; si no, total_final = nuevo subtotal.
+                _recalc_totales(ia_json)
+                context.user_data["ia_json"] = ia_json
+                await update.message.reply_text(
+                    f"✏️ *{cotizacion[idx]['estudio']}*: ${anterior:.2f} → ${float(nuevo):.2f}",
+                    parse_mode="Markdown",
+                )
+                return await _enviar_lista_precios(update, context)
 
+        # ── Cambiar el TOTAL final (descuento implicito) ──────────
+        if intent == "change_total":
+            nuevo_total = parsed.get("nuevo_total")
+            if nuevo_total is not None and nuevo_total >= 0:
+                subtotal = sum(float(c["precio"]) for c in cotizacion)
+                nuevo_total = float(nuevo_total)
+                if nuevo_total > subtotal:
+                    await update.message.reply_text(
+                        f"⚠️ El total ${nuevo_total:.2f} es *mayor* que el subtotal ${subtotal:.2f}. "
+                        "No aplico aumento. Si quieres cambiar precios, hazlo por estudio.",
+                        parse_mode="Markdown",
+                    )
+                    return ESPERANDO_CONFIRMACION_PRECIOS
+                ia_json["total"]       = subtotal
+                ia_json["total_final"] = nuevo_total
+                ia_json["descuento"]   = max(0.0, subtotal - nuevo_total)
+                context.user_data["ia_json"] = ia_json
+                await update.message.reply_text(
+                    f"💰 Total ajustado: *${subtotal:.2f}* → *${nuevo_total:.2f}*  "
+                    f"_(descuento aplicado: ${ia_json['descuento']:.2f})_",
+                    parse_mode="Markdown",
+                )
+                return await _enviar_lista_precios(update, context)
+
+        # ── Descuento como monto fijo ──────────────────────────────
+        if intent == "discount_amount":
+            monto = parsed.get("monto_descuento")
+            if monto is not None and monto > 0:
+                subtotal = sum(float(c["precio"]) for c in cotizacion)
+                monto = float(monto)
+                if monto > subtotal:
+                    await update.message.reply_text(
+                        f"⚠️ El descuento ${monto:.2f} es mayor que el subtotal ${subtotal:.2f}. No aplico.",
+                        parse_mode="Markdown",
+                    )
+                    return ESPERANDO_CONFIRMACION_PRECIOS
+                ia_json["total"]       = subtotal
+                ia_json["total_final"] = subtotal - monto
+                ia_json["descuento"]   = monto
+                context.user_data["ia_json"] = ia_json
+                await update.message.reply_text(
+                    f"💸 Descuento de *${monto:.2f}* aplicado. Total final: *${ia_json['total_final']:.2f}*",
+                    parse_mode="Markdown",
+                )
+                return await _enviar_lista_precios(update, context)
+
+        # ── Descuento como porcentaje ──────────────────────────────
+        if intent == "discount_percent":
+            pct = parsed.get("porcentaje_descuento")
+            if pct is not None and 0 < pct <= 100:
+                subtotal   = sum(float(c["precio"]) for c in cotizacion)
+                pct        = float(pct)
+                monto      = round(subtotal * pct / 100.0, 2)
+                ia_json["total"]       = subtotal
+                ia_json["total_final"] = subtotal - monto
+                ia_json["descuento"]   = monto
+                context.user_data["ia_json"] = ia_json
+                await update.message.reply_text(
+                    f"💸 Descuento del *{pct:g}%* (${monto:.2f}) aplicado. "
+                    f"Total final: *${ia_json['total_final']:.2f}*",
+                    parse_mode="Markdown",
+                )
+                return await _enviar_lista_precios(update, context)
+
+        # ── No entendi ─────────────────────────────────────────────
         await update.message.reply_text(
-            "No entendí el cambio. Ejemplos:\n"
-            "• _\"cambia biometría a 250\"_\n"
-            "• _\"el examen de orina vale 100\"_\n"
-            "• _\"sí\"_ para confirmar tal cual.",
+            "No entendí. Ejemplos de lo que puedes pedirme:\n"
+            "• _\"cambia biometría a 250\"_ — cambia un precio\n"
+            "• _\"el total será 1500\"_ — define el total final\n"
+            "• _\"descuento de 200\"_ — aplica descuento de monto fijo\n"
+            "• _\"15% de descuento\"_ — aplica descuento porcentual\n"
+            "• _\"sí\"_ — para confirmar tal cual",
             parse_mode="Markdown",
         )
         return ESPERANDO_CONFIRMACION_PRECIOS
@@ -480,11 +591,14 @@ async def handle_patient_name(update: Update, context: ContextTypes.DEFAULT_TYPE
         _os.unlink(internal_pdf_path)
 
         try:
+            # Para auditoria guardamos el TOTAL FINAL (lo que efectivamente
+            # se le cobra al paciente, despues de descuentos)
+            total_para_auditar = float(ia_json.get("total_final", ia_json.get("total", 0)))
             await save_cotizacion(
                 chat_id,
                 patient_name,
                 ia_json["cotizacion"],
-                ia_json["total"],
+                total_para_auditar,
                 ia_json.get("total_min", 0),
             )
         except Exception as db_err:
