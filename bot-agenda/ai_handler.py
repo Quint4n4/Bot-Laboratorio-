@@ -491,6 +491,15 @@ Si el usuario dice "cada", "todos los", "siempre", agrega recurrence_rule:
 - "cada 3 dias riega las plantas"      → recurrence_rule="every:3d"
 NO inventes recurrencia si el usuario solo lo pidio una vez.
 
+IMPORTANTE para "cada N minutos/horas" sin hora de inicio explicita:
+Si el usuario dice "recuerdame cada 20 minutos tomar agua" SIN especificar
+cuando empezar, el start_datetime debe ser AHORA + N (la primera ocurrencia
+es N minutos/horas en el futuro, NO en el pasado y NO inmediatamente).
+Ejemplo: si son las 3:00 PM y dice "cada 20 minutos tomar agua", entonces
+start_datetime = 3:20 PM y recurrence_rule="every:20m". Asi el primer aviso
+llega en 20 min y los siguientes cada 20 min. Si el usuario quiere empezar
+desde ya, dira "empezando ahora" o "el primero ya".
+
 FORMATO start_datetime: ISO 8601 hora LOCAL sin timezone. Ej: 2026-04-22T16:00:00"""
 
 

@@ -90,6 +90,24 @@ h3 {
 p, li, div { color: #0A0A0A; }
 .subhead { color: #525252; font-size: 1rem; margin-top: -8px; margin-bottom: 1.5rem; }
 
+/* Fix: la regla universal de arriba pinta el texto interno de los botones de
+   negro, lo cual los deja invisibles sobre el fondo negro del primary.
+   Forzar el color correcto en todo el contenido interno del boton.        */
+.stButton button[kind="primary"],
+.stButton button[kind="primary"] *,
+.stButton button[kind="primary"] p,
+.stButton button[kind="primary"] div,
+.stButton button[kind="primary"] span {
+    color: #FFFFFF !important;
+}
+.stButton button[kind="secondary"],
+.stButton button[kind="secondary"] *,
+.stButton button[kind="secondary"] p,
+.stButton button[kind="secondary"] div,
+.stButton button[kind="secondary"] span {
+    color: #0A0A0A !important;
+}
+
 /* ── KPI cards ──────────────────────────────────────── */
 .kpi-card {
     background: #FFFFFF;

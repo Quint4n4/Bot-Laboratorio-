@@ -118,7 +118,18 @@ async def check_due_reminders():
             # ocurrencia en lugar de marcarlo como ya enviado para siempre.
             # El mismo Event row se reutiliza ciclo tras ciclo.
             if event.recurrence_rule:
+                # Calcular la proxima ocurrencia.
+                # IMPORTANTE: si el bot estuvo caido o hubo latencia, la
+                # siguiente ocurrencia podria seguir estando en el pasado.
+                # Avanzar en bucle hasta encontrar una ocurrencia FUTURA,
+                # evitando rafagas de notificaciones de "catch-up" (un evento
+                # every:20m que estuvo 3 horas sin disparar mandaria 9 mensajes
+                # consecutivos sin esta proteccion).
                 nxt = next_occurrence(event.recurrence_rule, event.start_datetime)
+                guard = 0  # safety: max 1000 iteraciones para no colgar
+                while nxt and nxt <= now_utc and guard < 1000:
+                    nxt = next_occurrence(event.recurrence_rule, nxt)
+                    guard += 1
                 if nxt:
                     event.start_datetime  = nxt
                     if event.end_datetime:
