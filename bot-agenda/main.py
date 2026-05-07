@@ -195,12 +195,23 @@ async def cmd_agenda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if meta:
             text += "\n" + " · ".join(meta)
 
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✅",       callback_data=f"complete:{ev.id}"),
-            InlineKeyboardButton("⏰+15",    callback_data=f"snooze15:{ev.id}"),
-            InlineKeyboardButton("📝 Editar",callback_data=f"edit:{ev.id}"),
-            InlineKeyboardButton("❌",       callback_data=f"cancel:{ev.id}"),
-        ]])
+        # Para eventos recurrentes mostrar "Detener serie" en lugar de
+        # "Cancelar" (que en /agenda hace lo mismo que stopseries pero
+        # es menos explicito sobre el efecto en la serie).
+        if ev.recurrence_rule:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅",       callback_data=f"complete:{ev.id}"),
+                InlineKeyboardButton("⏰+15",    callback_data=f"snooze15:{ev.id}"),
+                InlineKeyboardButton("📝 Editar",callback_data=f"edit:{ev.id}"),
+                InlineKeyboardButton("🛑 Serie", callback_data=f"stopseries:{ev.id}"),
+            ]])
+        else:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅",       callback_data=f"complete:{ev.id}"),
+                InlineKeyboardButton("⏰+15",    callback_data=f"snooze15:{ev.id}"),
+                InlineKeyboardButton("📝 Editar",callback_data=f"edit:{ev.id}"),
+                InlineKeyboardButton("❌",       callback_data=f"cancel:{ev.id}"),
+            ]])
 
         await update.effective_message.reply_text(
             text, parse_mode="Markdown", reply_markup=keyboard,
@@ -535,14 +546,49 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # --- Completar evento ---
+        # Comportamiento distinto segun el tipo de evento:
+        #   * One-shot:  marcar como completed (cierra el evento).
+        #   * Recurrente: NO matar la serie. Solo confirmar la ocurrencia
+        #                 actual; el scheduler ya programo la siguiente
+        #                 vuelta. Si el usuario quiere terminar la serie,
+        #                 debe usar el boton "Detener serie".
         if data.startswith("complete:"):
             event_id = int(data.split(":")[1])
             event = db.query(Event).filter(Event.id == event_id).first()
             if event:
-                event.status = EventStatus.completed
+                if event.recurrence_rule:
+                    # Recurrente: no cambiar status, dejar que la serie siga.
+                    from recurrence import describe_rule
+                    await query.edit_message_reply_markup(reply_markup=None)
+                    await query.message.reply_text(
+                        f"✅ Hecho. La serie sigue activa: te recuerdo {describe_rule(event.recurrence_rule)}.\n"
+                        f"_Para detener la serie completa usa el boton 🛑 Detener serie._",
+                        parse_mode="Markdown",
+                    )
+                else:
+                    # One-shot: marcar como completado.
+                    event.status = EventStatus.completed
+                    db.commit()
+                    await query.edit_message_reply_markup(reply_markup=None)
+                    await query.message.reply_text(
+                        f"✅ *Listo!* _{event.title}_ marcado como completado.",
+                        parse_mode="Markdown",
+                    )
+
+        # --- Detener serie recurrente ---
+        # Cancela definitivamente un evento recurrente. El status pasa
+        # a cancelled y el scheduler deja de procesarlo.
+        elif data.startswith("stopseries:"):
+            event_id = int(data.split(":")[1])
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                event.status = EventStatus.cancelled
                 db.commit()
                 await query.edit_message_reply_markup(reply_markup=None)
-                await query.message.reply_text(f"✅ *Listo!* _{event.title}_ marcado como completado.", parse_mode="Markdown")
+                await query.message.reply_text(
+                    f"🛑 Serie detenida: _{event.title}_ ya no te recordara mas.",
+                    parse_mode="Markdown",
+                )
 
         # --- Snooze 15 min ---
         elif data.startswith("snooze15:"):

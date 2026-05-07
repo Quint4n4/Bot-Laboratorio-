@@ -85,11 +85,21 @@ async def check_due_reminders():
                 text += f"\n_{event.description}_"
 
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Listo",   callback_data=f"complete:{event.id}"),
-                InlineKeyboardButton("⏰ +15 min", callback_data=f"snooze15:{event.id}"),
-                InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
-            ]])
+            # Botones distintos segun si el evento es recurrente o one-shot.
+            # Para recurrentes: "Hecho" (esta vez) + "+15" + "Detener serie".
+            # Para one-shot:    "Listo" (cierra el evento) + "+15" + "Cancelar".
+            if event.recurrence_rule:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Hecho",         callback_data=f"complete:{event.id}"),
+                    InlineKeyboardButton("⏰ +15 min",       callback_data=f"snooze15:{event.id}"),
+                    InlineKeyboardButton("🛑 Detener serie",callback_data=f"stopseries:{event.id}"),
+                ]])
+            else:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Listo",   callback_data=f"complete:{event.id}"),
+                    InlineKeyboardButton("⏰ +15 min", callback_data=f"snooze15:{event.id}"),
+                    InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
+                ]])
 
             await _app.bot.send_message(
                 chat_id=event.user_telegram_id,
@@ -172,11 +182,19 @@ async def check_due_reminders():
             msg  = f"🔔 *{event.title}*\n{FOLLOWUP_MESSAGES[idx]}"
 
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Listo",   callback_data=f"complete:{event.id}"),
-                InlineKeyboardButton("⏰ +15 min", callback_data=f"snooze15:{event.id}"),
-                InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
-            ]])
+            # Mismos botones diferenciados que el recordatorio inicial
+            if event.recurrence_rule:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Hecho",         callback_data=f"complete:{event.id}"),
+                    InlineKeyboardButton("⏰ +15 min",       callback_data=f"snooze15:{event.id}"),
+                    InlineKeyboardButton("🛑 Detener serie",callback_data=f"stopseries:{event.id}"),
+                ]])
+            else:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Listo",   callback_data=f"complete:{event.id}"),
+                    InlineKeyboardButton("⏰ +15 min", callback_data=f"snooze15:{event.id}"),
+                    InlineKeyboardButton("❌ Cancelar",callback_data=f"cancel:{event.id}"),
+                ]])
 
             await _app.bot.send_message(
                 chat_id=event.user_telegram_id,
